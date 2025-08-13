@@ -1,19 +1,185 @@
 class TerrainGenerator {
     constructor() {
         this.noise = new PerlinNoise();
-        this.width = 200;
-        this.depth = 200;
-        this.maxHeight = 50;
-        this.segments = 100;
+        this.biomeNoise = new PerlinNoise(); // Separate noise for biome distribution
+        this.width = 2000;
+        this.depth = 2000;
+        this.maxHeight = 100;
+        this.segments = 1000;
         
-        // Terrain generation parameters
-        this.noiseScale = 0.02;
-        this.octaves = 6;
-        this.persistence = 0.5;
-        this.lacunarity = 2.0;
+        // Biome scale - controls how large biome regions are
+        this.biomeScale = 0.003; // Larger biome regions
+        
+        // Define different biomes with their terrain parameters
+        this.biomes = {
+            plains: {
+                name: 'Plains',
+                noiseScale: 0.015,
+                octaves: 4,
+                persistence: 0.4,
+                lacunarity: 2.0,
+                heightMultiplier: 0.3,
+                baseHeight: 0.1,
+                colors: {
+                    low: { r: 0.2, g: 0.6, b: 0.1 },    // Green grass
+                    mid: { r: 0.3, g: 0.7, b: 0.2 },    // Lighter green
+                    high: { r: 0.4, g: 0.5, b: 0.3 }    // Hills
+                }
+            },
+            mountains: {
+                name: 'Mountains',
+                noiseScale: 0.008,
+                octaves: 8,
+                persistence: 0.6,
+                lacunarity: 2.5,
+                heightMultiplier: 1.2,
+                baseHeight: 0.2,
+                colors: {
+                    low: { r: 0.3, g: 0.5, b: 0.2 },    // Forest green
+                    mid: { r: 0.5, g: 0.5, b: 0.5 },    // Rocky gray
+                    high: { r: 0.9, g: 0.9, b: 0.9 }    // Snow
+                }
+            },
+            desert: {
+                name: 'Desert',
+                noiseScale: 0.02,
+                octaves: 3,
+                persistence: 0.3,
+                lacunarity: 1.8,
+                heightMultiplier: 0.4,
+                baseHeight: 0.0,
+                colors: {
+                    low: { r: 0.8, g: 0.7, b: 0.4 },    // Sand
+                    mid: { r: 0.7, g: 0.6, b: 0.3 },    // Darker sand
+                    high: { r: 0.6, g: 0.5, b: 0.3 }    // Rocky sand
+                }
+            },
+            forest: {
+                name: 'Forest',
+                noiseScale: 0.025,
+                octaves: 6,
+                persistence: 0.5,
+                lacunarity: 2.2,
+                heightMultiplier: 0.6,
+                baseHeight: 0.15,
+                colors: {
+                    low: { r: 0.1, g: 0.4, b: 0.1 },    // Dark green
+                    mid: { r: 0.2, g: 0.5, b: 0.1 },    // Forest green
+                    high: { r: 0.3, g: 0.6, b: 0.2 }    // Light green
+                }
+            },
+            tundra: {
+                name: 'Tundra',
+                noiseScale: 0.012,
+                octaves: 5,
+                persistence: 0.45,
+                lacunarity: 2.0,
+                heightMultiplier: 0.5,
+                baseHeight: 0.05,
+                colors: {
+                    low: { r: 0.6, g: 0.7, b: 0.8 },    // Icy blue
+                    mid: { r: 0.7, g: 0.7, b: 0.7 },    // Gray
+                    high: { r: 0.9, g: 0.9, b: 0.9 }    // Snow
+                }
+            }
+        };
+        
+        this.biomeList = Object.keys(this.biomes);
         
         this.mesh = null;
         this.heightMap = [];
+    }
+
+    // Determine biome at a given world position
+    getBiomeAtPosition(worldX, worldZ) {
+        // Use biome noise to determine which biome this position belongs to
+        const biomeValue = this.biomeNoise.fractalNoise(worldX, worldZ, 3, 0.5, this.biomeScale);
+        
+        // Map noise value to biome index
+        const normalizedValue = (biomeValue + 1) / 2; // Convert from [-1,1] to [0,1]
+        const biomeIndex = Math.floor(normalizedValue * this.biomeList.length);
+        const clampedIndex = Math.max(0, Math.min(this.biomeList.length - 1, biomeIndex));
+        
+        return this.biomes[this.biomeList[clampedIndex]];
+    }
+
+    // Blend between biomes for smooth transitions
+    getBlendedBiomeParams(worldX, worldZ) {
+        const sampleRadius = 100; // Distance to sample for blending
+        const samples = [
+            { x: worldX, z: worldZ, weight: 4 }, // Center sample has more weight
+            { x: worldX + sampleRadius, z: worldZ, weight: 1 },
+            { x: worldX - sampleRadius, z: worldZ, weight: 1 },
+            { x: worldX, z: worldZ + sampleRadius, weight: 1 },
+            { x: worldX, z: worldZ - sampleRadius, weight: 1 },
+            // Add diagonal samples for better blending
+            { x: worldX + sampleRadius * 0.7, z: worldZ + sampleRadius * 0.7, weight: 0.5 },
+            { x: worldX - sampleRadius * 0.7, z: worldZ - sampleRadius * 0.7, weight: 0.5 },
+            { x: worldX + sampleRadius * 0.7, z: worldZ - sampleRadius * 0.7, weight: 0.5 },
+            { x: worldX - sampleRadius * 0.7, z: worldZ + sampleRadius * 0.7, weight: 0.5 }
+        ];
+        
+        const biomeInfluences = {};
+        let totalWeight = 0;
+        
+        // Calculate influence of each biome at this position
+        samples.forEach(sample => {
+            const biome = this.getBiomeAtPosition(sample.x, sample.z);
+            const distance = Math.sqrt((sample.x - worldX) ** 2 + (sample.z - worldZ) ** 2);
+            const falloff = Math.exp(-distance / (sampleRadius * 0.5)); // Exponential falloff
+            const weight = sample.weight * falloff;
+            
+            if (!biomeInfluences[biome.name]) {
+                biomeInfluences[biome.name] = { biome: biome, weight: 0 };
+            }
+            biomeInfluences[biome.name].weight += weight;
+            totalWeight += weight;
+        });
+        
+        // Normalize weights
+        Object.values(biomeInfluences).forEach(influence => {
+            influence.weight /= totalWeight;
+        });
+        
+        // Blend biome parameters based on influences
+        const blendedParams = {
+            noiseScale: 0,
+            octaves: 0,
+            persistence: 0,
+            lacunarity: 0,
+            heightMultiplier: 0,
+            baseHeight: 0,
+            colors: {
+                low: { r: 0, g: 0, b: 0 },
+                mid: { r: 0, g: 0, b: 0 },
+                high: { r: 0, g: 0, b: 0 }
+            }
+        };
+        
+        // Weighted average of all biome parameters
+        Object.values(biomeInfluences).forEach(influence => {
+            const biome = influence.biome;
+            const weight = influence.weight;
+            
+            blendedParams.noiseScale += biome.noiseScale * weight;
+            blendedParams.octaves += biome.octaves * weight;
+            blendedParams.persistence += biome.persistence * weight;
+            blendedParams.lacunarity += biome.lacunarity * weight;
+            blendedParams.heightMultiplier += biome.heightMultiplier * weight;
+            blendedParams.baseHeight += biome.baseHeight * weight;
+            
+            // Blend colors
+            ['low', 'mid', 'high'].forEach(level => {
+                blendedParams.colors[level].r += biome.colors[level].r * weight;
+                blendedParams.colors[level].g += biome.colors[level].g * weight;
+                blendedParams.colors[level].b += biome.colors[level].b * weight;
+            });
+        });
+        
+        // Round octaves to nearest integer (can't have fractional octaves)
+        blendedParams.octaves = Math.round(blendedParams.octaves);
+        
+        return blendedParams;
     }
 
     generateTerrain() {
@@ -32,17 +198,20 @@ class TerrainGenerator {
                 const worldX = (x / this.segments) * this.width - this.width / 2;
                 const worldZ = (z / this.segments) * this.depth - this.depth / 2;
                 
-                // Generate height using fractal noise
+                // Get biome parameters for this position
+                const biome = this.getBlendedBiomeParams(worldX, worldZ);
+                
+                // Generate height using biome-specific fractal noise
                 let height = this.noise.fractalNoise(
                     worldX, worldZ, 
-                    this.octaves, 
-                    this.persistence, 
-                    this.noiseScale
+                    biome.octaves, 
+                    biome.persistence, 
+                    biome.noiseScale
                 );
                 
-                // Apply some terrain shaping
+                // Apply biome-specific terrain shaping
                 height = Math.pow(Math.abs(height), 0.8) * Math.sign(height);
-                height *= this.maxHeight;
+                height = (height * biome.heightMultiplier + biome.baseHeight) * this.maxHeight;
                 
                 this.heightMap[z][x] = height;
                 
@@ -51,9 +220,9 @@ class TerrainGenerator {
                 // Generate UV coordinates
                 uvs.push(x / this.segments, z / this.segments);
                 
-                // Generate color based on height
-                const normalizedHeight = (height + this.maxHeight) / (2 * this.maxHeight);
-                const color = this.getTerrainColor(normalizedHeight);
+                // Generate color based on height and biome
+                const normalizedHeight = Math.max(0, Math.min(1, (height + this.maxHeight) / (2 * this.maxHeight)));
+                const color = this.getBiomeTerrainColor(normalizedHeight, biome);
                 colors.push(color.r, color.g, color.b);
             }
         }
@@ -100,6 +269,29 @@ class TerrainGenerator {
         this.mesh.castShadow = true;
 
         return this.mesh;
+    }
+
+    getBiomeTerrainColor(height, biome) {
+        // Use biome-specific colors based on height
+        if (height < 0.4) {
+            return biome.colors.low;
+        } else if (height < 0.7) {
+            // Interpolate between low and mid colors
+            const t = (height - 0.4) / 0.3;
+            return {
+                r: biome.colors.low.r + t * (biome.colors.mid.r - biome.colors.low.r),
+                g: biome.colors.low.g + t * (biome.colors.mid.g - biome.colors.low.g),
+                b: biome.colors.low.b + t * (biome.colors.mid.b - biome.colors.low.b)
+            };
+        } else {
+            // Interpolate between mid and high colors
+            const t = (height - 0.7) / 0.3;
+            return {
+                r: biome.colors.mid.r + t * (biome.colors.high.r - biome.colors.mid.r),
+                g: biome.colors.mid.g + t * (biome.colors.high.g - biome.colors.mid.g),
+                b: biome.colors.mid.b + t * (biome.colors.high.b - biome.colors.mid.b)
+            };
+        }
     }
 
     getTerrainColor(height) {
@@ -203,6 +395,7 @@ class TerrainGenerator {
 
     regenerate() {
         this.noise = new PerlinNoise();
+        this.biomeNoise = new PerlinNoise(); // Regenerate biome distribution too
         return this.generateTerrain();
     }
 }
