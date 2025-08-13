@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Procedural 3D Terrain Generator</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #000;
+            font-family: Arial, sans-serif;
+        }
+
+        #container {
+            position: relative;
+            width: 100vw;
+            height: 100vh;
+        }
+
+        #ui {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            z-index: 100;
+            color: white;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 15px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .control-group {
+            margin-bottom: 10px;
+        }
+
+        button {
+            background: #007acc;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            margin: 5px;
+            border-radius: 3px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #005a9e;
+        }
+
+        button.active {
+            background: #00cc44;
+        }
+
+        #instructions {
+            margin-top: 15px;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="ui">
+            <div class="control-group">
+                <strong>Control Mode:</strong><br>
+                <button id="cameraMode" class="active">Camera Mode</button>
+                <button id="playerMode">Player Mode</button>
+            </div>
+            <div class="control-group">
+                <button id="regenerate">Regenerate Terrain</button>
+            </div>
+            <div id="instructions">
+                <strong>Controls:</strong><br>
+                WASD - Move<br>
+                Mouse - Look around<br>
+                <br>
+                <strong>Camera Mode:</strong> Free flying camera<br>
+                <strong>Player Mode:</strong> Ground collision enabled
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="js/noise.js"></script>
+    <script src="js/terrain.js"></script>
+    <script src="js/main.js"></script>
+</body>
+</html>
