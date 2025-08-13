@@ -22,6 +22,10 @@ class TerrainApp {
         this.velocity = new THREE.Vector3(0, 0, 0);
         this.isGrounded = false;
         
+        // Skybox references
+        this.skybox = null;
+        this.skyMaterial = null;
+        
         this.init();
         this.setupControls();
         this.animate();
@@ -30,7 +34,7 @@ class TerrainApp {
     init() {
         // Create scene
         this.scene = new THREE.Scene();
-        this.scene.fog = new THREE.Fog(0x87CEEB, 50, 300);
+        this.scene.fog = new THREE.Fog(0x87CEEB, 1000, 10000);
 
         // Create camera
         this.camera = new THREE.PerspectiveCamera(
@@ -88,32 +92,61 @@ class TerrainApp {
     }
 
     createSkybox() {
-        const skyGeometry = new THREE.SphereGeometry(500, 32, 32);
+        // Create a fullscreen quad for the procedural sky
+        const skyGeometry = new THREE.PlaneGeometry(2, 2);
         
-        // Create gradient texture for sky
-        const canvas = document.createElement('canvas');
-        canvas.width = 256;
-        canvas.height = 256;
-        const context = canvas.getContext('2d');
-        
-        // Create gradient
-        const gradient = context.createLinearGradient(0, 0, 0, 256);
-        gradient.addColorStop(0, '#87CEEB'); // Sky blue
-        gradient.addColorStop(0.7, '#98D8E8'); // Lighter blue
-        gradient.addColorStop(1, '#F0F8FF'); // Almost white
-        
-        context.fillStyle = gradient;
-        context.fillRect(0, 0, 256, 256);
-        
-        const texture = new THREE.CanvasTexture(canvas);
-        
-        const skyMaterial = new THREE.MeshBasicMaterial({
-            map: texture,
-            side: THREE.BackSide
+        this.skyMaterial = new THREE.ShaderMaterial({
+            uniforms: {
+                cameraWorldMatrix: { value: new THREE.Matrix4() },
+                cameraProjectionMatrixInverse: { value: new THREE.Matrix4() }
+            },
+            vertexShader: `
+                varying vec2 vUv;
+                void main() {
+                    vUv = uv;
+                    gl_Position = vec4(position.xy, 1.0, 1.0);
+                }
+            `,
+            fragmentShader: `
+                uniform mat4 cameraWorldMatrix;
+                uniform mat4 cameraProjectionMatrixInverse;
+                varying vec2 vUv;
+                
+                void main() {
+                    // Convert screen coordinates to world ray direction
+                    vec2 screenPos = vUv * 2.0 - 1.0;
+                    vec4 ndcPos = vec4(screenPos, 1.0, 1.0);
+                    vec4 worldPos = cameraWorldMatrix * cameraProjectionMatrixInverse * ndcPos;
+                    vec3 rayDir = normalize(worldPos.xyz);
+                    
+                    // Calculate elevation angle (0 = horizon, 1 = zenith)
+                    float elevation = rayDir.y * 0.5 + 0.5;
+                    elevation = smoothstep(0.0, 1.0, elevation);
+                    
+                    // Sky colors
+                    vec3 horizonColor = vec3(0.94, 0.85, 1.0); // Light blue/white at horizon
+                    vec3 zenithColor = vec3(0.53, 0.81, 0.92);  // Sky blue at zenith
+                    
+                    // Create gradient
+                    vec3 skyColor = mix(horizonColor, zenithColor, elevation);
+                    
+                    // Add subtle atmospheric effect
+                    float atmosphere = 1.0 - abs(rayDir.y);
+                    atmosphere = pow(atmosphere, 2.0);
+                    skyColor = mix(skyColor, vec3(0.9, 0.95, 1.0), atmosphere * 0.1);
+                    
+                    gl_FragColor = vec4(skyColor, 1.0);
+                }
+            `,
+            depthWrite: false,
+            depthTest: false,
+            side: THREE.DoubleSide
         });
         
-        const skybox = new THREE.Mesh(skyGeometry, skyMaterial);
-        this.scene.add(skybox);
+        this.skybox = new THREE.Mesh(skyGeometry, this.skyMaterial);
+        this.skybox.renderOrder = -1;
+        this.skybox.frustumCulled = false;
+        this.scene.add(this.skybox);
     }
 
     setupControls() {
@@ -288,6 +321,13 @@ class TerrainApp {
         this.camera.rotation.set(0, 0, 0); // Reset rotation
         this.camera.rotateY(this.cameraRotation.y); // Yaw around world Y-axis
         this.camera.rotateX(this.cameraRotation.x); // Pitch around local X-axis
+
+        // Update sky shader uniforms for infinite sky effect
+        if (this.skyMaterial) {
+            this.camera.updateMatrixWorld();
+            this.skyMaterial.uniforms.cameraWorldMatrix.value.copy(this.camera.matrixWorld);
+            this.skyMaterial.uniforms.cameraProjectionMatrixInverse.value.copy(this.camera.projectionMatrixInverse);
+        }
 
         // Render
         this.renderer.render(this.scene, this.camera);
