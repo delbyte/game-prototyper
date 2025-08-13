@@ -1,0 +1,23 @@
+{
+  "name": "procedural-terrain-generator",
+  "version": "1.0.0",
+  "description": "A 3D procedural terrain generator with Three.js",
+  "main": "index.html",
+  "scripts": {
+    "start": "npx http-server -p 8000 -o",
+    "dev": "npx http-server -p 8000 -o"
+  },
+  "keywords": [
+    "threejs",
+    "procedural",
+    "terrain",
+    "3d",
+    "perlin-noise",
+    "webgl"
+  ],
+  "author": "",
+  "license": "GPL-3.0",
+  "devDependencies": {
+    "http-server": "^14.1.1"
+  }
+}
