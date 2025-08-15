@@ -1,4 +1,7 @@
-class TerrainApp {
+import * as THREE from 'three';
+import { TerrainGenerator } from './terrain.js';
+
+export class TerrainApp {
     constructor() {
         this.scene = null;
         this.camera = null;
