@@ -2,10 +2,11 @@
   "name": "procedural-terrain-generator",
   "version": "1.0.0",
   "description": "A 3D procedural terrain generator with Three.js",
-  "main": "index.html",
+  "type": "module",
   "scripts": {
-    "start": "npx http-server -p 8000 -o",
-    "dev": "npx http-server -p 8000 -o"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
   "keywords": [
     "threejs",
@@ -18,6 +19,10 @@
   "author": "",
   "license": "GPL-3.0",
   "devDependencies": {
-    "http-server": "^14.1.1"
+    "@types/three": "^0.179.0",
+    "vite": "^7.1.2"
+  },
+  "dependencies": {
+    "three": "^0.179.1"
   }
 }
