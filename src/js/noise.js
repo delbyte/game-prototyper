@@ -1,5 +1,5 @@
 // Simplified Perlin noise implementation
-class PerlinNoise {
+export class PerlinNoise {
     constructor(seed = Math.random()) {
         this.seed = seed;
         this.permutation = this.generatePermutation();
