@@ -1,4 +1,7 @@
-class TerrainGenerator {
+import * as THREE from 'three';
+import { PerlinNoise } from './noise.js';
+
+export class TerrainGenerator {
     constructor() {
         this.noise = new PerlinNoise();
         this.biomeNoise = new PerlinNoise(); // Separate noise for biome distribution
