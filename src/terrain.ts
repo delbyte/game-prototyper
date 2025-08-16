@@ -2,91 +2,100 @@ import * as THREE from 'three';
 import { PerlinNoise } from './noise';
 
 export class TerrainGenerator {
-    constructor() {
+    constructor(params: any = null) {
         this.noise = new PerlinNoise();
         this.biomeNoise = new PerlinNoise(); // Separate noise for biome distribution
-        this.width = 2000;
-        this.depth = 2000;
-        this.maxHeight = 100;
-        this.segments = 1000;
-        
-        // Biome scale - controls how large biome regions are
-        this.biomeScale = 0.003; // Larger biome regions
-        
-        // Define different biomes with their terrain parameters
-        this.biomes = {
-            plains: {
-                name: 'Plains',
-                noiseScale: 0.015,
-                octaves: 4,
-                persistence: 0.4,
-                lacunarity: 2.0,
-                heightMultiplier: 0.3,
-                baseHeight: 0.1,
-                colors: {
-                    low: { r: 0.2, g: 0.6, b: 0.1 },    // Green grass
-                    mid: { r: 0.3, g: 0.7, b: 0.2 },    // Lighter green
-                    high: { r: 0.4, g: 0.5, b: 0.3 }    // Hills
+
+        if (params) {
+            this.width = params.global.width;
+            this.depth = params.global.depth;
+            this.maxHeight = params.global.maxHeight;
+            this.segments = params.global.segments;
+            this.biomeScale = params.global.biomeScale;
+            this.biomes = {};
+            params.biomes.forEach(biome => {
+                this.biomes[biome.name] = biome;
+            });
+        } else {
+            this.width = 2000;
+            this.depth = 2000;
+            this.maxHeight = 100;
+            this.segments = 1000;
+            this.biomeScale = 0.003; // Larger biome regions
+            this.biomes = {
+                plains: {
+                    name: 'Plains',
+                    noiseScale: 0.015,
+                    octaves: 4,
+                    persistence: 0.4,
+                    lacunarity: 2.0,
+                    heightMultiplier: 0.3,
+                    baseHeight: 0.1,
+                    colors: {
+                        low: { r: 0.2, g: 0.6, b: 0.1 },    // Green grass
+                        mid: { r: 0.3, g: 0.7, b: 0.2 },    // Lighter green
+                        high: { r: 0.4, g: 0.5, b: 0.3 }    // Hills
+                    }
+                },
+                mountains: {
+                    name: 'Mountains',
+                    noiseScale: 0.008,
+                    octaves: 8,
+                    persistence: 0.6,
+                    lacunarity: 2.5,
+                    heightMultiplier: 1.2,
+                    baseHeight: 0.2,
+                    colors: {
+                        low: { r: 0.3, g: 0.5, b: 0.2 },    // Forest green
+                        mid: { r: 0.5, g: 0.5, b: 0.5 },    // Rocky gray
+                        high: { r: 0.9, g: 0.9, b: 0.9 }    // Snow
+                    }
+                },
+                desert: {
+                    name: 'Desert',
+                    noiseScale: 0.02,
+                    octaves: 3,
+                    persistence: 0.3,
+                    lacunarity: 1.8,
+                    heightMultiplier: 0.4,
+                    baseHeight: 0.0,
+                    colors: {
+                        low: { r: 0.8, g: 0.7, b: 0.4 },    // Sand
+                        mid: { r: 0.7, g: 0.6, b: 0.3 },    // Darker sand
+                        high: { r: 0.6, g: 0.5, b: 0.3 }    // Rocky sand
+                    }
+                },
+                forest: {
+                    name: 'Forest',
+                    noiseScale: 0.025,
+                    octaves: 6,
+                    persistence: 0.5,
+                    lacunarity: 2.2,
+                    heightMultiplier: 0.6,
+                    baseHeight: 0.15,
+                    colors: {
+                        low: { r: 0.1, g: 0.4, b: 0.1 },    // Dark green
+                        mid: { r: 0.2, g: 0.5, b: 0.1 },    // Forest green
+                        high: { r: 0.3, g: 0.6, b: 0.2 }    // Light green
+                    }
+                },
+                tundra: {
+                    name: 'Tundra',
+                    noiseScale: 0.012,
+                    octaves: 5,
+                    persistence: 0.45,
+                    lacunarity: 2.0,
+                    heightMultiplier: 0.5,
+                    baseHeight: 0.05,
+                    colors: {
+                        low: { r: 0.6, g: 0.7, b: 0.8 },    // Icy blue
+                        mid: { r: 0.7, g: 0.7, b: 0.7 },    // Gray
+                        high: { r: 0.9, g: 0.9, b: 0.9 }    // Snow
+                    }
                 }
-            },
-            mountains: {
-                name: 'Mountains',
-                noiseScale: 0.008,
-                octaves: 8,
-                persistence: 0.6,
-                lacunarity: 2.5,
-                heightMultiplier: 1.2,
-                baseHeight: 0.2,
-                colors: {
-                    low: { r: 0.3, g: 0.5, b: 0.2 },    // Forest green
-                    mid: { r: 0.5, g: 0.5, b: 0.5 },    // Rocky gray
-                    high: { r: 0.9, g: 0.9, b: 0.9 }    // Snow
-                }
-            },
-            desert: {
-                name: 'Desert',
-                noiseScale: 0.02,
-                octaves: 3,
-                persistence: 0.3,
-                lacunarity: 1.8,
-                heightMultiplier: 0.4,
-                baseHeight: 0.0,
-                colors: {
-                    low: { r: 0.8, g: 0.7, b: 0.4 },    // Sand
-                    mid: { r: 0.7, g: 0.6, b: 0.3 },    // Darker sand
-                    high: { r: 0.6, g: 0.5, b: 0.3 }    // Rocky sand
-                }
-            },
-            forest: {
-                name: 'Forest',
-                noiseScale: 0.025,
-                octaves: 6,
-                persistence: 0.5,
-                lacunarity: 2.2,
-                heightMultiplier: 0.6,
-                baseHeight: 0.15,
-                colors: {
-                    low: { r: 0.1, g: 0.4, b: 0.1 },    // Dark green
-                    mid: { r: 0.2, g: 0.5, b: 0.1 },    // Forest green
-                    high: { r: 0.3, g: 0.6, b: 0.2 }    // Light green
-                }
-            },
-            tundra: {
-                name: 'Tundra',
-                noiseScale: 0.012,
-                octaves: 5,
-                persistence: 0.45,
-                lacunarity: 2.0,
-                heightMultiplier: 0.5,
-                baseHeight: 0.05,
-                colors: {
-                    low: { r: 0.6, g: 0.7, b: 0.8 },    // Icy blue
-                    mid: { r: 0.7, g: 0.7, b: 0.7 },    // Gray
-                    high: { r: 0.9, g: 0.9, b: 0.9 }    // Snow
-                }
-            }
-        };
-        
+            };
+        }
+
         this.biomeList = Object.keys(this.biomes);
         
         this.mesh = null;
@@ -396,9 +405,21 @@ export class TerrainGenerator {
         return h0 * (1 - fz) + h1 * fz;
     }
 
-    regenerate() {
+    regenerate(params: any = null) {
         this.noise = new PerlinNoise();
         this.biomeNoise = new PerlinNoise(); // Regenerate biome distribution too
+        if (params) {
+            this.width = params.global.width;
+            this.depth = params.global.depth;
+            this.maxHeight = params.global.maxHeight;
+            this.segments = params.global.segments;
+            this.biomeScale = params.global.biomeScale;
+            this.biomes = {};
+            params.biomes.forEach(biome => {
+                this.biomes[biome.name] = biome;
+            });
+            this.biomeList = Object.keys(this.biomes);
+        }
         return this.generateTerrain();
     }
 }
