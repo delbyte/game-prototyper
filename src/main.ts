@@ -7,9 +7,11 @@ import { setupUI } from './ui';
 import { TerrainGenerator } from './terrain';
 import { updateMovement } from './player';
 
-const { renderer, scene } = initRenderer();
+import { sampleTerrainParameters } from './sample-terrain-parameters';
+
+const { renderer, scene } = initRenderer(sampleTerrainParameters.skybox, sampleTerrainParameters.lighting);
 const camera = initCamera();
-const terrainGenerator = new TerrainGenerator();
+const terrainGenerator = new TerrainGenerator(sampleTerrainParameters);
 const terrain = terrainGenerator.generateTerrain();
 terrain.name = 'terrain';
 scene.add(terrain);
