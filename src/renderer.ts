@@ -10,7 +10,7 @@ let scene: THREE.Scene;
 let skybox: THREE.Mesh;
 let skyMaterial: THREE.ShaderMaterial;
 
-export function initRenderer() {
+export function initRenderer(skyboxParams: any = null, lightingParams: any = null) {
     // Create scene
     scene = new THREE.Scene();
     scene.fog = new THREE.Fog(0x87CEEB, 1000, 10000);
@@ -27,22 +27,26 @@ export function initRenderer() {
         container.appendChild(renderer.domElement);
     }
 
-    setupLighting();
-    createSkybox();
+    setupLighting(lightingParams);
+    createSkybox(skyboxParams);
 
     window.addEventListener('resize', onWindowResize);
 
     return { renderer, scene };
 }
 
-function setupLighting() {
+function setupLighting(params: any) {
     // Ambient light
-    const ambientLight = new THREE.AmbientLight(0x404040, 0.6);
+    const ambientColor = params ? new THREE.Color(params.ambient.color.r, params.ambient.color.g, params.ambient.color.b) : new THREE.Color(0x404040);
+    const ambientIntensity = params ? params.ambient.intensity : 0.6;
+    const ambientLight = new THREE.AmbientLight(ambientColor, ambientIntensity);
     scene.add(ambientLight);
 
     // Directional light (sun)
-    const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    directionalLight.position.set(100, 100, 50);
+    const directionalColor = params ? new THREE.Color(params.directional.color.r, params.directional.color.g, params.directional.color.b) : new THREE.Color(0xffffff);
+    const directionalIntensity = params ? params.directional.intensity : 0.8;
+    const directionalLight = new THREE.DirectionalLight(directionalColor, directionalIntensity);
+    directionalLight.position.set(params ? params.directional.position.x : 100, params ? params.directional.position.y : 100, params ? params.directional.position.z : 50);
     directionalLight.castShadow = true;
     directionalLight.shadow.mapSize.width = 2048;
     directionalLight.shadow.mapSize.height = 2048;
@@ -55,14 +59,23 @@ function setupLighting() {
     scene.add(directionalLight);
 }
 
-function createSkybox() {
+function createSkybox(params: any) {
     // Create a fullscreen quad for the procedural sky
     const skyGeometry = new THREE.PlaneGeometry(2, 2);
+
+    const horizonColor = params ? new THREE.Color(params.horizonColor.r, params.horizonColor.g, params.horizonColor.b) : new THREE.Color(0.94, 0.85, 1.0);
+    const zenithColor = params ? new THREE.Color(params.zenithColor.r, params.zenithColor.g, params.zenithColor.b) : new THREE.Color(0.53, 0.81, 0.92);
+    const atmosphereColor = params ? new THREE.Color(params.atmosphereColor.r, params.atmosphereColor.g, params.atmosphereColor.b) : new THREE.Color(0.9, 0.95, 1.0);
+    const atmosphereStrength = params ? params.atmosphereStrength : 0.1;
 
     skyMaterial = new THREE.ShaderMaterial({
         uniforms: {
             cameraWorldMatrix: { value: new THREE.Matrix4() },
-            cameraProjectionMatrixInverse: { value: new THREE.Matrix4() }
+            cameraProjectionMatrixInverse: { value: new THREE.Matrix4() },
+            horizonColor: { value: horizonColor },
+            zenithColor: { value: zenithColor },
+            atmosphereColor: { value: atmosphereColor },
+            atmosphereStrength: { value: atmosphereStrength },
         },
         vertexShader: `
             varying vec2 vUv;
@@ -74,6 +87,10 @@ function createSkybox() {
         fragmentShader: `
             uniform mat4 cameraWorldMatrix;
             uniform mat4 cameraProjectionMatrixInverse;
+            uniform vec3 horizonColor;
+            uniform vec3 zenithColor;
+            uniform vec3 atmosphereColor;
+            uniform float atmosphereStrength;
             varying vec2 vUv;
             
             void main() {
@@ -88,16 +105,12 @@ function createSkybox() {
                 elevation = smoothstep(0.0, 1.0, elevation);
                 
                 // Sky colors
-                vec3 horizonColor = vec3(0.94, 0.85, 1.0); // Light blue/white at horizon
-                vec3 zenithColor = vec3(0.53, 0.81, 0.92);  // Sky blue at zenith
-                
-                // Create gradient
                 vec3 skyColor = mix(horizonColor, zenithColor, elevation);
                 
                 // Add subtle atmospheric effect
                 float atmosphere = 1.0 - abs(rayDir.y);
                 atmosphere = pow(atmosphere, 2.0);
-                skyColor = mix(skyColor, vec3(0.9, 0.95, 1.0), atmosphere * 0.1);
+                skyColor = mix(skyColor, atmosphereColor, atmosphere * atmosphereStrength);
                 
                 gl_FragColor = vec4(skyColor, 1.0);
             }
@@ -136,4 +149,33 @@ export function startAnimationLoop(terrainGenerator: TerrainGenerator) {
     }
 
     renderer.render(scene, camera);
+}
+
+export function updateSkybox(params: any) {
+    if (!skyMaterial) return;
+    
+    const horizonColor = params ? new THREE.Color(params.horizonColor.r, params.horizonColor.g, params.horizonColor.b) : new THREE.Color(0.94, 0.85, 1.0);
+    const zenithColor = params ? new THREE.Color(params.zenithColor.r, params.zenithColor.g, params.zenithColor.b) : new THREE.Color(0.53, 0.81, 0.92);
+    const atmosphereColor = params ? new THREE.Color(params.atmosphereColor.r, params.atmosphereColor.g, params.atmosphereColor.b) : new THREE.Color(0.9, 0.95, 1.0);
+    const atmosphereStrength = params ? params.atmosphereStrength : 0.1;
+
+    skyMaterial.uniforms.horizonColor.value = horizonColor;
+    skyMaterial.uniforms.zenithColor.value = zenithColor;
+    skyMaterial.uniforms.atmosphereColor.value = atmosphereColor;
+    skyMaterial.uniforms.atmosphereStrength.value = atmosphereStrength;
+    
+    console.log('Updated skybox with params:', params);
+}
+
+export function updateLighting(params: any) {
+    // Remove existing lights
+    const lightsToRemove = scene.children.filter(child => 
+        child instanceof THREE.AmbientLight || child instanceof THREE.DirectionalLight
+    );
+    lightsToRemove.forEach(light => scene.remove(light));
+    
+    // Add new lights with new parameters
+    setupLighting(params);
+    
+    console.log('Updated lighting with params:', params);
 }
