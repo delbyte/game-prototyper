@@ -1,10 +1,4 @@
-declare module './js/main.js' {
-  export class TerrainApp {
-    constructor();
-  }
-}
-
-declare module './js/terrain.js' {
+declare module './terrain.ts' {
   export class TerrainGenerator {
     constructor();
     generateTerrain(): any;
@@ -13,7 +7,7 @@ declare module './js/terrain.js' {
   }
 }
 
-declare module './js/noise.js' {
+declare module './noise.ts' {
   export class PerlinNoise {
     constructor(seed?: number);
     noise(x: number, y: number, z?: number): number;
