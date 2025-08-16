@@ -23,6 +23,7 @@
     "vite": "^7.1.2"
   },
   "dependencies": {
+    "@google/generative-ai": "^0.24.1",
     "three": "^0.179.1"
   }
 }
