@@ -3,6 +3,8 @@ import { state } from './state';
 import { TerrainGenerator } from './terrain';
 import * as THREE from 'three';
 
+import { sampleTerrainParameters } from './sample-terrain-parameters';
+
 export function setupUI(terrainGenerator: TerrainGenerator, scene: THREE.Scene) {
     const cameraButton = document.getElementById('cameraMode');
     const playerButton = document.getElementById('playerMode');
@@ -47,7 +49,7 @@ function regenerateTerrain(terrainGenerator: TerrainGenerator, scene: THREE.Scen
         ((terrain as THREE.Mesh).material as THREE.Material).dispose();
     }
 
-    const newTerrain = terrainGenerator.regenerate();
+    const newTerrain = terrainGenerator.regenerate(sampleTerrainParameters);
     newTerrain.name = 'terrain';
     scene.add(newTerrain);
 }

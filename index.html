@@ -53,6 +53,31 @@
             background: #00cc44;
         }
 
+        button:disabled {
+            background: #666;
+            cursor: not-allowed;
+        }
+
+        .loading {
+            background: #ff9900 !important;
+        }
+
+        #promptInput {
+            width: 200px;
+            padding: 5px;
+            margin: 5px;
+            border: 1px solid #555;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+            border-radius: 3px;
+        }
+
+        #status {
+            margin-top: 10px;
+            font-size: 12px;
+            color: #aaa;
+        }
+
         #instructions {
             margin-top: 15px;
             font-size: 12px;
@@ -63,14 +88,17 @@
 <body>
     <div id="container">
         <div id="ui">
-            <div class="control-group">
-                <strong>Control Mode:</strong><br>
-                <button id="cameraMode" class="active">Camera Mode</button>
-                <button id="playerMode">Player Mode</button>
+            <div class="controls">
+                <button id="cameraMode" class="active">Camera</button>
+                <button id="playerMode">Player</button>
+                <button id="regenerate">Regenerate</button>
             </div>
-            <div class="control-group">
-                <button id="regenerate">Regenerate Terrain</button>
+            <div class="prompt-container">
+                <input type="text" id="promptInput" placeholder="Describe the world you want to create...">
+                <button id="generate">Generate</button>
+                <button id="default">Default</button>
             </div>
+            <div id="status">Ready</div>
             <div id="instructions">
                 <strong>Controls:</strong><br>
                 WASD - Move<br>
