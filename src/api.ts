@@ -8,80 +8,128 @@ export async function generateTerrainParameters(prompt: string): Promise<any> {
         const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash"});
 
         const fullPrompt = `
-        You are a creative world-building assistant. Your task is to generate a JSON object that describes a world based on the user's prompt. The JSON object must follow the EXACT structure and value ranges defined below. Do not include any other text or explanations in your response, only the JSON object.
+        You are a creative world-building assistant for a real-time 3D terrain generator built with Three.js and WebGL. Your JSON output will be directly used to:
 
-        **CRITICAL VALUE RANGES (DO NOT EXCEED THESE):**
-        - ALL COLOR VALUES: Must be between 0.0 and 1.0 (NOT 0-255 range)
-        - global.width/depth: 1000-2500
-        - global.maxHeight: 50-150
-        - global.segments: 200-500 (higher = more detail but slower)
-        - global.biomeScale: 0.002-0.008 (smaller = larger biome regions)
-        - noiseScale: 0.008-0.025 (smaller = larger terrain features)
-        - octaves: 3-6
-        - persistence: 0.3-0.6
-        - lacunarity: 1.8-2.5
-        - heightMultiplier: 0.3-1.2
-        - baseHeight: 0.0-0.3
-        - lighting intensities: 0.3-0.8
-        - directional.position: values like {x: 100, y: 100, z: 50}
+        **HOW YOUR OUTPUT IS USED:**
+        1. **Terrain Generation**: Uses Perlin noise with your biome parameters to generate mesh vertices in real-time
+        2. **Skybox Rendering**: Creates procedural sky using fragment shaders with your skybox colors
+        3. **3D Lighting**: Sets up Three.js ambient and directional lights with shadows for realistic illumination
+        4. **Real-time Performance**: Must render at 60fps, so parameters need to be performance-optimized
 
-        **JSON Structure:**
+        **TECHNICAL CONSTRAINTS & OPTIMIZATION:**
+        - **segments**: Controls mesh triangle count (400-1000). Higher = more detail but slower rendering
+        - **octaves**: Perlin noise layers (4-8). More = more detail but exponentially slower computation
+        - **noiseScale**: Terrain feature size (0.005-0.025). Smaller = larger mountains/valleys
+        - **biomeScale**: Biome region size (0.003-0.008). Smaller = larger biome areas with smoother transitions
+        - **Colors**: Three.js uses 0.0-1.0 range. Applied to vertex colors and lighting calculations
+        - **heightMultiplier**: Scales terrain height (0.3-1.8). Too high creates unrealistic spikes
+        - **Multiple Biomes**: Create 1-5 biomes that blend smoothly using distance-based interpolation
 
-\`\`\`json
-{
-  "global": {
-    "width": <number 1000-2500>,
-    "depth": <number 1000-2500>,
-    "maxHeight": <number 50-150>,
-    "segments": <number 200-500>,
-    "biomeScale": <number 0.002-0.008>
-  },
-  "skybox": {
-    "horizonColor": { "r": <0.0-1.0>, "g": <0.0-1.0>, "b": <0.0-1.0> },
-    "zenithColor": { "r": <0.0-1.0>, "g": <0.0-1.0>, "b": <0.0-1.0> },
-    "atmosphereColor": { "r": <0.0-1.0>, "g": <0.0-1.0>, "b": <0.0-1.0> },
-    "atmosphereStrength": <number 0.0-0.2>
-  },
-  "lighting": {
-    "ambient": {
-      "color": { "r": <0.0-1.0>, "g": <0.0-1.0>, "b": <0.0-1.0> },
-      "intensity": <number 0.3-0.8>
-    },
-    "directional": {
-      "color": { "r": <0.0-1.0>, "g": <0.0-1.0>, "b": <0.0-1.0> },
-      "intensity": <number 0.3-0.8>,
-      "position": { "x": <number -150 to 150>, "y": <number 50-150>, "z": <number -150 to 150> }
-    }
-  },
-  "biomes": [
-    {
-      "name": "<string>",
-      "noiseScale": <number 0.008-0.025>,
-      "octaves": <number 3-6>,
-      "persistence": <number 0.3-0.6>,
-      "lacunarity": <number 1.8-2.5>,
-      "heightMultiplier": <number 0.3-1.2>,
-      "baseHeight": <number 0.0-0.3>,
-      "colors": {
-        "low": { "r": <0.0-1.0>, "g": <0.0-1.0>, "b": <0.0-1.0> },
-        "mid": { "r": <0.0-1.0>, "g": <0.0-1.0>, "b": <0.0-1.0> },
-        "high": { "r": <0.0-1.0>, "g": <0.0-1.0>, "b": <0.0-1.0> }
-      }
-    }
-  ]
-}
-\`\`\`
+        **LIGHTING & SKYBOX SYSTEM:**
+        - **Ambient Light**: Base illumination affecting all surfaces (like sky light)
+        - **Directional Light**: Main light source (sun) with position, color, and shadow casting
+        - **Skybox Shader**: Procedural gradient from horizonColor (bottom) to zenithColor (top)
+        - **Atmosphere Effect**: Adds realistic haze around horizon using atmosphereColor
 
-        **EXAMPLES OF GOOD VALUES (use these as reference):**
-        - noiseScale: 0.015 (NOT 75 or 500!)
-        - heightMultiplier: 0.8 (NOT 90!)
-        - baseHeight: 0.1 (NOT 10!)
-        - biomeScale: 0.005 (NOT 500!)
-        - Colors: { "r": 0.2, "g": 0.6, "b": 0.1 } (NOT { "r": 20, "g": 60, "b": 10 })
-        - Daytime sky: horizonColor around { "r": 0.9, "g": 0.9, "b": 1.0 }, zenithColor around { "r": 0.5, "g": 0.7, "b": 1.0 }
-        - Night sky: horizonColor around { "r": 0.1, "g": 0.1, "b": 0.2 }, zenithColor around { "r": 0.0, "g": 0.0, "b": 0.1 }
+        **REFERENCE EXAMPLE (use similar value ranges and structure):**
+        \`\`\`json
+        {
+          "global": {
+            "width": 2000,
+            "depth": 2000,
+            "maxHeight": 150,
+            "segments": 1000,
+            "biomeScale": 0.005
+          },
+          "skybox": {
+            "horizonColor": { "r": 0.0, "g": 0.0, "b": 0.0 },
+            "zenithColor": { "r": 0.0, "g": 0.0, "b": 0.2 },
+            "atmosphereColor": { "r": 0.5, "g": 0.5, "b": 0.7 },
+            "atmosphereStrength": 0.05
+          },
+          "lighting": {
+            "ambient": {
+              "color": { "r": 0.1, "g": 0.1, "b": 0.2 },
+              "intensity": 0.3
+            },
+            "directional": {
+              "color": { "r": 0.5, "g": 0.5, "b": 0.7 },
+              "intensity": 0.5,
+              "position": { "x": 0, "y": 100, "z": 0 }
+            }
+          },
+          "biomes": [
+            {
+              "name": "Volcanic Wastes",
+              "noiseScale": 0.01,
+              "octaves": 6,
+              "persistence": 0.5,
+              "lacunarity": 2.2,
+              "heightMultiplier": 0.8,
+              "baseHeight": 0.2,
+              "colors": {
+                "low": { "r": 0.1, "g": 0.1, "b": 0.1 },
+                "mid": { "r": 0.3, "g": 0.2, "b": 0.2 },
+                "high": { "r": 0.8, "g": 0.3, "b": 0.1 }
+              }
+            },
+            {
+              "name": "Crystal Spires",
+              "noiseScale": 0.005,
+              "octaves": 8,
+              "persistence": 0.6,
+              "lacunarity": 2.8,
+              "heightMultiplier": 1.5,
+              "baseHeight": 0.5,
+              "colors": {
+                "low": { "r": 0.2, "g": 0.4, "b": 0.8 },
+                "mid": { "r": 0.5, "g": 0.7, "b": 1.0 },
+                "high": { "r": 0.9, "g": 0.9, "b": 1.0 }
+              }
+            }
+          ]
+        }
+        \`\`\`
 
-        **User Prompt:** ${JSON.stringify(prompt)}
+        **CREATIVE STRATEGIES:**
+        ✅ **DO:**
+        - Create 2-5 biomes for visual variety (mountains, valleys, forests, deserts, etc.)
+        - Use contrasting terrain parameters between biomes (smooth plains vs jagged mountains)
+        - Match lighting and skybox to create cohesive atmosphere and mood
+        - Consider time of day: bright daylight, golden sunset, moody twilight, or dark night
+        - Use realistic color palettes that work together harmoniously
+        - Think about the world's story/theme when choosing all parameters
+
+        ✅ **SUCCESSFUL COMBINATIONS:**
+        - **Tropical Paradise**: Bright blue sky, warm golden lighting, green/blue biomes
+        - **Alien World**: Purple/magenta sky, cool blue lighting, unusual biome colors
+        - **Post-Apocalyptic**: Orange/brown sky, harsh lighting, burnt/grey biomes
+        - **Fantasy Realm**: Magical colors, ethereal lighting, vibrant fantasy biomes
+
+        **VALUE RANGES (CRITICAL - stay within these):**
+        - global.width/depth: 1500-2500
+        - global.maxHeight: 80-200
+        - global.segments: 400-1000
+        - global.biomeScale: 0.003-0.008 (smaller = larger biome regions)
+        - noiseScale: 0.005-0.025 (smaller = smoother, larger terrain features)
+        - octaves: 4-8 (more = more detail)
+        - persistence: 0.3-0.7
+        - lacunarity: 1.8-2.8
+        - heightMultiplier: 0.3-1.8
+        - baseHeight: 0.0-0.6
+        - All color r,g,b: 0.0-1.0 (NEVER use 0-255 range)
+        - lighting intensities: 0.2-0.8
+        - atmosphereStrength: 0.01-0.15
+
+        **SKYBOX EXAMPLES FOR INSPIRATION:**
+        - Bright Day: horizonColor ~{0.9,0.9,1.0}, zenithColor ~{0.5,0.7,1.0}
+        - Golden Sunset: horizonColor ~{1.0,0.7,0.3}, zenithColor ~{0.3,0.1,0.7}
+        - Dark Night: horizonColor ~{0.1,0.1,0.2}, zenithColor ~{0.0,0.0,0.1}
+        - Alien Sky: horizonColor ~{0.8,0.3,0.8}, zenithColor ~{0.2,0.8,0.4}
+
+        **Your Mission:** Create a cohesive, visually stunning 3D world that brings this prompt to life: ${JSON.stringify(prompt)}
+        
+        Think about atmosphere, mood, and visual storytelling. Make skybox, lighting, and terrain biomes work together to create an immersive, believable world.
     `;
 
         const result = await model.generateContent(fullPrompt);
