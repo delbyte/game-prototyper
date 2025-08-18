@@ -12,6 +12,11 @@ export class AssetBrowserClient {
     private selectedMetadata?: AssetMetadata;
     private selectedPlacedId?: string;
     private raycaster = new THREE.Raycaster();
+    private dragging = false;
+    private dragPlacedId?: string;
+    private dragPlane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
+    private pointerDownPos: { x: number; y: number } | null = null;
+    private dragMoved = false;
 
     constructor(assetManager: AssetManager, camera: THREE.Camera, domElement: HTMLElement, serverBase = 'http://localhost:3001', container: HTMLElement = document.body) {
         this.assetManager = assetManager;
@@ -219,6 +224,7 @@ export class AssetBrowserClient {
 
     // Selection: allow clicking existing placed meshes to edit them
     private setupSelectionListener() {
+        // Pointer down starts selection or drag
         this.domElement.addEventListener('pointerdown', (ev) => {
             // Ignore when in placement mode
             if (this.selectedMetadata) return;
@@ -236,7 +242,57 @@ export class AssetBrowserClient {
             const placed = this.assetManager.findPlacedAssetByObject(first.object);
             if (!placed) return;
 
+            // Start dragging if left button
+            if (ev.button === 0) {
+                this.dragging = true;
+                this.dragPlacedId = placed.id;
+                this.dragMoved = false;
+                this.pointerDownPos = { x: ev.clientX, y: ev.clientY };
+                // compute drag plane at placed object's current Y
+                this.dragPlane.set(new THREE.Vector3(0, 1, 0), -placed.position.y);
+                // capture pointer events
+                (this.domElement as HTMLElement).setPointerCapture((ev as any).pointerId);
+            }
+
             this.showTransformEditor(placed);
+        });
+
+        // Pointer move -> when dragging, update position by intersecting with drag plane
+        this.domElement.addEventListener('pointermove', (ev) => {
+            if (!this.dragging || !this.dragPlacedId) return;
+            const rect = (this.domElement as HTMLCanvasElement).getBoundingClientRect();
+            const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+            const y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+            const mouse = new THREE.Vector2(x, y);
+            this.raycaster.setFromCamera(mouse, this.camera);
+
+            const origin = this.raycaster.ray.origin;
+            const dir = this.raycaster.ray.direction;
+            const target = new THREE.Vector3();
+            const hit = this.dragPlane.intersectLine(new THREE.Line3(origin, origin.clone().add(dir.clone().multiplyScalar(10000))), target);
+            if (hit) {
+                // update placed asset X/Z (and Y stays aligned to ground/base)
+                const placed = this.assetManager.getPlacedAssets().find(p => p.id === this.dragPlacedId);
+                if (!placed) return;
+                // Set new x,z and keep y as provided (treated as desired base Y)
+                const newPos = new THREE.Vector3(target.x, placed.position.y, target.z);
+                this.assetManager.updatePlacedAssetTransforms(placed.id, { position: newPos });
+                this.dragMoved = true;
+            }
+        });
+
+        // Pointer up ends drag
+        this.domElement.addEventListener('pointerup', (ev) => {
+            if (this.dragging) {
+                this.dragging = false;
+                if ((this.domElement as HTMLElement).hasPointerCapture((ev as any).pointerId)) {
+                    try { (this.domElement as HTMLElement).releasePointerCapture((ev as any).pointerId); } catch(e) {}
+                }
+                // clear drag state
+                this.dragPlacedId = undefined;
+                this.pointerDownPos = null;
+                this.dragMoved = false;
+            }
         });
     }
 
@@ -263,43 +319,111 @@ export class AssetBrowserClient {
         title.style.marginBottom = '6px';
         panel.appendChild(title);
 
-        const fields: { label: string; value: string }[] = [];
         const pos = placed.position;
         const rot = placed.rotation;
         const scl = placed.scale;
 
-        const makeInput = (label: string, value: string, onChange: (v: string) => void) => {
+        // Helper to create labeled slider
+        const makeSlider = (labelText: string, min: number, max: number, step: number, value: number, onChange: (v: number) => void) => {
             const row = document.createElement('div');
             row.style.display = 'flex';
-            row.style.gap = '6px';
-            row.style.marginBottom = '6px';
+            row.style.flexDirection = 'column';
+            row.style.gap = '4px';
+            row.style.marginBottom = '8px';
+
+            const labRow = document.createElement('div');
+            labRow.style.display = 'flex';
+            labRow.style.justifyContent = 'space-between';
             const lab = document.createElement('div');
-            lab.textContent = label;
-            lab.style.width = '60px';
-            const inp = document.createElement('input');
-            inp.value = value;
-            inp.style.flex = '1';
-            inp.addEventListener('change', () => onChange(inp.value));
-            row.appendChild(lab);
-            row.appendChild(inp);
+            lab.textContent = labelText;
+            const valLabel = document.createElement('div');
+            valLabel.textContent = value.toFixed(2);
+            valLabel.style.opacity = '0.9';
+            labRow.appendChild(lab);
+            labRow.appendChild(valLabel);
+
+            const input = document.createElement('input');
+            input.type = 'range';
+            input.min = String(min);
+            input.max = String(max);
+            input.step = String(step);
+            input.value = String(value);
+            input.addEventListener('input', () => {
+                const v = parseFloat(input.value);
+                valLabel.textContent = v.toFixed(2);
+                onChange(v);
+            });
+
+            row.appendChild(labRow);
+            row.appendChild(input);
             panel!.appendChild(row);
-            return inp;
+            return { input, valLabel };
         };
 
-        // Position
-        makeInput('pos x', pos.x.toFixed(2), (v) => this.updatePlaced({ x: parseFloat(v) }, 'position'));
-        makeInput('pos y', pos.y.toFixed(2), (v) => this.updatePlaced({ y: parseFloat(v) }, 'position'));
-        makeInput('pos z', pos.z.toFixed(2), (v) => this.updatePlaced({ z: parseFloat(v) }, 'position'));
+        // Position sliders (default range will be adjustable below)
+        const posRange = { min: -500, max: 500 };
+        makeSlider('pos x', posRange.min, posRange.max, 0.1, pos.x, (v) => this.updatePlaced({ x: v }, 'position'));
+        makeSlider('pos y', posRange.min, posRange.max, 0.1, pos.y, (v) => this.updatePlaced({ y: v }, 'position'));
+        makeSlider('pos z', posRange.min, posRange.max, 0.1, pos.z, (v) => this.updatePlaced({ z: v }, 'position'));
 
-        // Rotation (degrees)
-        makeInput('rot x', (rot.x * 180 / Math.PI).toFixed(1), (v) => this.updatePlaced({ x: parseFloat(v) * Math.PI / 180 }, 'rotation'));
-        makeInput('rot y', (rot.y * 180 / Math.PI).toFixed(1), (v) => this.updatePlaced({ y: parseFloat(v) * Math.PI / 180 }, 'rotation'));
-        makeInput('rot z', (rot.z * 180 / Math.PI).toFixed(1), (v) => this.updatePlaced({ z: parseFloat(v) * Math.PI / 180 }, 'rotation'));
+        // Rotation sliders (degrees, -180..180)
+        makeSlider('rot x', -180, 180, 0.5, rot.x * 180 / Math.PI, (v) => this.updatePlaced({ x: v * Math.PI / 180 }, 'rotation'));
+        makeSlider('rot y', -180, 180, 0.5, rot.y * 180 / Math.PI, (v) => this.updatePlaced({ y: v * Math.PI / 180 }, 'rotation'));
+        makeSlider('rot z', -180, 180, 0.5, rot.z * 180 / Math.PI, (v) => this.updatePlaced({ z: v * Math.PI / 180 }, 'rotation'));
 
-        // Scale
-        makeInput('scl x', scl.x.toFixed(2), (v) => this.updatePlaced({ x: parseFloat(v) }, 'scale'));
-        makeInput('scl y', scl.y.toFixed(2), (v) => this.updatePlaced({ y: parseFloat(v) }, 'scale'));
-        makeInput('scl z', scl.z.toFixed(2), (v) => this.updatePlaced({ z: parseFloat(v) }, 'scale'));
+        // Uniform scale slider (single slider controlling all axes)
+        const defaultScaleRange = { min: 0.01, max: 10 };
+        const uniformScale = (scl.x + scl.y + scl.z) / 3;
+        const scaleSlider = makeSlider('scale', defaultScaleRange.min, defaultScaleRange.max, 0.01, uniformScale, (v) => {
+            this.updatePlaced({ x: v, y: v, z: v }, 'scale');
+        });
+
+        // Allow adjusting slider ranges (small inputs)
+        const limitsRow = document.createElement('div');
+        limitsRow.style.display = 'flex';
+        limitsRow.style.gap = '6px';
+        limitsRow.style.marginTop = '6px';
+        const limitsLabel = document.createElement('div');
+        limitsLabel.textContent = 'Ranges:';
+        limitsLabel.style.alignSelf = 'center';
+        const rangePosInput = document.createElement('input');
+        rangePosInput.type = 'text';
+        rangePosInput.placeholder = 'posRange e.g. -500,500';
+        rangePosInput.style.flex = '1';
+        const rangeScaleInput = document.createElement('input');
+        rangeScaleInput.type = 'text';
+        rangeScaleInput.placeholder = 'scaleRange e.g. 0.01,10';
+        rangeScaleInput.style.flex = '1';
+        const applyRangesBtn = document.createElement('button');
+        applyRangesBtn.textContent = 'Apply';
+        applyRangesBtn.addEventListener('click', () => {
+            try {
+                const p = rangePosInput.value.split(',').map(s => parseFloat(s.trim()));
+                if (p.length === 2 && !isNaN(p[0]) && !isNaN(p[1])) {
+                    // update pos sliders
+                    const inputs = panel!.querySelectorAll('input[type="range"]');
+                    // first 3 are pos, next 3 rotation, then scale -> update first 3 and last
+                    (inputs[0] as HTMLInputElement).min = String(p[0]);
+                    (inputs[0] as HTMLInputElement).max = String(p[1]);
+                    (inputs[1] as HTMLInputElement).min = String(p[0]);
+                    (inputs[1] as HTMLInputElement).max = String(p[1]);
+                    (inputs[2] as HTMLInputElement).min = String(p[0]);
+                    (inputs[2] as HTMLInputElement).max = String(p[1]);
+                }
+                const s = rangeScaleInput.value.split(',').map(s => parseFloat(s.trim()));
+                if (s.length === 2 && !isNaN(s[0]) && !isNaN(s[1])) {
+                    const inputs = panel!.querySelectorAll('input[type="range"]');
+                    const scaleIndex = inputs.length - 1;
+                    (inputs[scaleIndex] as HTMLInputElement).min = String(s[0]);
+                    (inputs[scaleIndex] as HTMLInputElement).max = String(s[1]);
+                }
+            } catch (e) { /* ignore */ }
+        });
+        limitsRow.appendChild(limitsLabel);
+        limitsRow.appendChild(rangePosInput);
+        limitsRow.appendChild(rangeScaleInput);
+        limitsRow.appendChild(applyRangesBtn);
+        panel.appendChild(limitsRow);
 
         const removeBtn = document.createElement('button');
         removeBtn.textContent = 'Remove';
