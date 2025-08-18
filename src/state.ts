@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 
 export const state = {
-    keys: {},
+    keys: {} as Record<string, boolean | undefined>,
     mouse: { x: 0, y: 0, prevX: 0, prevY: 0 },
     isPointerLocked: false,
     controlMode: 'camera', // 'camera' or 'player'
