@@ -238,7 +238,47 @@ export class AssetManager {
         this.placedAssets.set(placedAsset.id, placedAsset);
 
         console.log(`Placed asset: ${metadata.name} at position (${placedAsset.position.x}, ${placedAsset.position.y}, ${placedAsset.position.z}) with scale ${autoScale}`);
+        // tag the mesh so UI/selection code can find which placed asset it belongs to
+        try { (mesh as any).userData = (mesh as any).userData || {}; (mesh as any).userData.placedId = placedAsset.id; } catch(e) { /* ignore */ }
         return placedAsset;
+    }
+
+    /**
+     * Update a placed asset's transform (position/rotation/scale).
+     * Position.y is treated as the desired ground/base Y; the asset will be offset so its bottom sits at that Y.
+     */
+    updatePlacedAssetTransform(placedId: string, opts: { position?: THREE.Vector3; rotation?: THREE.Euler; scale?: THREE.Vector3 }): boolean {
+        const placed = this.placedAssets.get(placedId);
+        if (!placed) return false;
+
+        const mesh = placed.mesh;
+
+        if (opts.scale) {
+            mesh.scale.copy(opts.scale);
+            placed.scale.copy(opts.scale);
+        }
+
+        if (opts.rotation) {
+            mesh.rotation.copy(opts.rotation);
+            placed.rotation.copy(opts.rotation);
+        }
+
+        // Recompute bounding box after scale/rotation so we can align bottom to desired Y
+        const box = new THREE.Box3().setFromObject(mesh);
+        const minY = box.min.y;
+
+        if (opts.position) {
+            // position.y is considered the target ground/base Y
+            mesh.position.set(opts.position.x, opts.position.y - minY, opts.position.z);
+            placed.position.copy(mesh.position);
+        } else {
+            // if only adjusting scale/rotation, keep current x/z but realign Y base
+            const cur = mesh.position;
+            mesh.position.set(cur.x, cur.y - minY, cur.z);
+            placed.position.copy(mesh.position);
+        }
+
+        return true;
     }
 
     /**
