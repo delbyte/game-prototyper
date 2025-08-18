@@ -1,0 +1,20 @@
+[
+  {
+    "id": "buggy",
+    "name": "Buggy",
+    "description": "Sample buggy glTF",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Buggy/glTF/Buggy.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Buggy/screenshot/screenshot.png",
+    "tags": ["vehicle", "car"]
+  },
+  {
+    "id": "duck",
+    "name": "Duck",
+    "description": "Classic duck model",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF/Duck.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/screenshot/screenshot.png",
+    "tags": ["animal", "bird"]
+  }
+]
