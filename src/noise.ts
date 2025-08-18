@@ -1,5 +1,8 @@
 // Simplified Perlin noise implementation
 export class PerlinNoise {
+    seed: number;
+    permutation: number[];
+
     constructor(seed = Math.random()) {
         this.seed = seed;
         this.permutation = this.generatePermutation();
@@ -31,22 +34,22 @@ export class PerlinNoise {
         return x - Math.floor(x);
     }
 
-    fade(t) {
+    fade(t: number) {
         return t * t * t * (t * (t * 6 - 15) + 10);
     }
 
-    lerp(a, b, t) {
+    lerp(a: number, b: number, t: number) {
         return a + t * (b - a);
     }
 
-    grad(hash, x, y, z) {
+    grad(hash: number, x: number, y: number, z: number) {
         const h = hash & 15;
         const u = h < 8 ? x : y;
         const v = h < 4 ? y : h === 12 || h === 14 ? x : z;
         return ((h & 1) === 0 ? u : -u) + ((h & 2) === 0 ? v : -v);
     }
 
-    noise(x, y, z = 0) {
+    noise(x: number, y: number, z: number = 0) {
         const X = Math.floor(x) & 255;
         const Y = Math.floor(y) & 255;
         const Z = Math.floor(z) & 255;
@@ -98,7 +101,7 @@ export class PerlinNoise {
     }
 
     // Fractal noise with multiple octaves
-    fractalNoise(x, y, octaves = 4, persistence = 0.5, scale = 0.01) {
+    fractalNoise(x: number, y: number, octaves: number = 4, persistence: number = 0.5, scale: number = 0.01) {
         let value = 0;
         let amplitude = 1;
         let frequency = scale;
