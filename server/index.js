@@ -43,10 +43,72 @@ try {
 
 app.get('/search', (req, res) => {
   const q = (req.query.q || '').toLowerCase();
+  // If no query provided, return sample index
   if (!q) return res.json({ results: sampleIndex });
 
-  const results = sampleIndex.filter(a => (a.name + ' ' + (a.description || '') + ' ' + (a.tags || []).join(' ')).toLowerCase().includes(q));
-  res.json({ results });
+  const token = process.env.SKETCHFAB_TOKEN;
+  if (!token) {
+    // no token: local search
+    const results = sampleIndex.filter(a => (a.name + ' ' + (a.description || '') + ' ' + (a.tags || []).join(' ')).toLowerCase().includes(q));
+    return res.json({ results });
+  }
+
+  // Use Sketchfab Data API to search models. We try to find downloadable glTF when possible.
+  (async () => {
+    try {
+      const searchUrl = `https://api.sketchfab.com/v3/search?type=models&q=${encodeURIComponent(q)}&downloadable=true`;
+      const sresp = await fetch(searchUrl, { headers: { Authorization: `Token ${token}` } });
+      if (!sresp.ok) throw new Error('Sketchfab search failed');
+      const sjson = await sresp.json();
+      const hits = sjson.results || [];
+
+      const results = [];
+      for (const h of hits) {
+        const uid = h.uid || h.uid || h.id || h._id || h.uid;
+        const name = h.name || h.title || 'Untitled';
+        const description = h.description || '';
+        const thumbnailUrl = h.thumbnails && h.thumbnails.images && h.thumbnails.images[0] && h.thumbnails.images[0].url ? h.thumbnails.images[0].url : (h.thumbnails && h.thumbnails[0] && h.thumbnails[0].url) || '';
+
+        // Try to get download manifest for this model to find a glTF URL
+        let fileUrl = `https://sketchfab.com/models/${uid}`;
+        try {
+          const mresp = await fetch(`https://api.sketchfab.com/v3/models/${uid}/download`, { headers: { Authorization: `Token ${token}` } });
+          if (mresp.ok) {
+            const mjson = await mresp.json();
+            // mjson.formats likely contains arrays of format objects; prefer gltf or glb
+            if (Array.isArray(mjson.formats)) {
+              for (const fmt of mjson.formats) {
+                if (!fmt || !fmt.format) continue;
+                const fmtname = (fmt.format && (fmt.format.type || fmt.format.name)) || '';
+                if (fmtname.toLowerCase().includes('gltf') || fmtname.toLowerCase().includes('glb')) {
+                  // fmt.files may contain entries with urls
+                  if (fmt.files && Array.isArray(fmt.files)) {
+                    const candidate = fmt.files.find(f => f.url && (f.url.endsWith('.gltf') || f.url.endsWith('.glb') || f.url.indexOf('.bin') !== -1 || f.url.indexOf('.khr') !== -1));
+                    if (candidate && candidate.url) {
+                      fileUrl = candidate.url;
+                      break;
+                    }
+                  }
+                }
+              }
+            }
+          }
+        } catch (err) {
+          // ignore per-model download errors
+          console.warn('model download info failed', uid, err.message || err);
+        }
+
+        results.push({ id: uid, name, description, thumbnailUrl, url: fileUrl, tags: h.tags || [] });
+      }
+
+      res.json({ results });
+    } catch (err) {
+      console.error('Sketchfab search error', err);
+      // fallback local search
+      const results = sampleIndex.filter(a => (a.name + ' ' + (a.description || '') + ' ' + (a.tags || []).join(' ')).toLowerCase().includes(q));
+      res.json({ results });
+    }
+  })();
 });
 
 app.post('/download', async (req, res) => {
