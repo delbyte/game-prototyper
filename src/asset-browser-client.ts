@@ -1,0 +1,412 @@
+import * as THREE from 'three';
+import { AssetManager } from './asset-manager';
+import type { AssetMetadata } from './asset-manager';
+
+export class AssetBrowserClient {
+    private assetManager: AssetManager;
+    private camera: THREE.Camera;
+    private domElement: HTMLElement;
+    private serverBase: string;
+    private container: HTMLElement;
+    private panel?: HTMLElement;
+    private selectedMetadata?: AssetMetadata;
+    private selectedPlacedId?: string;
+    private raycaster = new THREE.Raycaster();
+
+    constructor(assetManager: AssetManager, camera: THREE.Camera, domElement: HTMLElement, serverBase = 'http://localhost:3001', container: HTMLElement = document.body) {
+        this.assetManager = assetManager;
+        this.camera = camera;
+        this.domElement = domElement;
+        this.serverBase = serverBase.replace(/\/$/, '');
+        this.container = container;
+
+        this.createButton();
+    this.setupSelectionListener();
+    }
+
+    private createButton() {
+        const btn = document.createElement('button');
+        btn.textContent = 'Assets';
+        btn.style.position = 'fixed';
+        btn.style.left = '10px';
+        btn.style.top = '10px';
+        btn.style.zIndex = '1000';
+        btn.style.padding = '8px 12px';
+        btn.style.background = '#007acc';
+        btn.style.color = 'white';
+        btn.style.border = 'none';
+        btn.style.borderRadius = '4px';
+        btn.style.cursor = 'pointer';
+        btn.addEventListener('click', () => this.togglePanel());
+        this.container.appendChild(btn);
+    }
+
+    private togglePanel() {
+        if (this.panel && this.panel.parentElement) {
+            this.panel.remove();
+            this.panel = undefined;
+            return;
+        }
+        this.createPanel();
+    }
+
+    private createPanel() {
+        this.panel = document.createElement('div');
+        this.panel.style.position = 'fixed';
+        this.panel.style.right = '20px';
+        this.panel.style.top = '20px';
+        this.panel.style.width = '360px';
+        this.panel.style.maxHeight = '70vh';
+        this.panel.style.overflow = 'auto';
+        this.panel.style.background = 'rgba(0,0,0,0.85)';
+        this.panel.style.color = 'white';
+        this.panel.style.zIndex = '1000';
+        this.panel.style.padding = '12px';
+        this.panel.style.borderRadius = '6px';
+        this.panel.style.boxShadow = '0 6px 18px rgba(0,0,0,0.6)';
+
+        const title = document.createElement('h3');
+        title.textContent = 'Asset Browser';
+        title.style.marginTop = '0';
+        this.panel.appendChild(title);
+
+        const searchRow = document.createElement('div');
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.placeholder = 'Search assets...';
+        input.style.width = '70%';
+        input.style.padding = '6px';
+        input.style.marginRight = '6px';
+        const searchBtn = document.createElement('button');
+        searchBtn.textContent = 'Search';
+        searchBtn.style.padding = '6px 8px';
+        searchBtn.addEventListener('click', () => this.search(input.value.trim()));
+        searchRow.appendChild(input);
+        searchRow.appendChild(searchBtn);
+        this.panel.appendChild(searchRow);
+
+        const results = document.createElement('div');
+        results.id = 'asset-browser-results';
+        results.style.marginTop = '10px';
+        this.panel.appendChild(results);
+
+        const close = document.createElement('button');
+        close.textContent = 'Close';
+        close.style.marginTop = '10px';
+        close.addEventListener('click', () => this.togglePanel());
+        this.panel.appendChild(close);
+
+        this.container.appendChild(this.panel);
+
+        // Load default (all) results
+        this.search('');
+    }
+
+    private async search(query: string) {
+        const resultsDiv = this.panel?.querySelector('#asset-browser-results') as HTMLElement;
+        if (!resultsDiv) return;
+        resultsDiv.innerHTML = 'Searching...';
+
+        try {
+            const url = `${this.serverBase}/search?q=${encodeURIComponent(query)}`;
+            const resp = await fetch(url);
+            const payload = await resp.json();
+            const results: any[] = payload.results || [];
+
+            resultsDiv.innerHTML = '';
+            if (results.length === 0) {
+                resultsDiv.textContent = 'No results';
+                return;
+            }
+
+            for (const r of results) {
+                const item = document.createElement('div');
+                item.style.display = 'flex';
+                item.style.gap = '8px';
+                item.style.marginBottom = '8px';
+                item.style.alignItems = 'center';
+
+                const thumb = document.createElement('img');
+                thumb.src = r.thumbnailUrl || '';
+                thumb.style.width = '64px';
+                thumb.style.height = '64px';
+                thumb.style.objectFit = 'cover';
+                thumb.style.background = '#222';
+                thumb.alt = r.name || 'asset';
+
+                const meta = document.createElement('div');
+                meta.style.flex = '1';
+                const name = document.createElement('div');
+                name.textContent = r.name || 'Unnamed';
+                name.style.fontWeight = 'bold';
+                const desc = document.createElement('div');
+                desc.textContent = r.description || '';
+                desc.style.fontSize = '12px';
+                desc.style.opacity = '0.9';
+                meta.appendChild(name);
+                meta.appendChild(desc);
+
+                const actions = document.createElement('div');
+                const downloadBtn = document.createElement('button');
+                downloadBtn.textContent = 'Fetch & Place';
+                downloadBtn.style.padding = '6px 8px';
+                downloadBtn.addEventListener('click', () => this.fetchAndPlace(r));
+                actions.appendChild(downloadBtn);
+
+                item.appendChild(thumb);
+                item.appendChild(meta);
+                item.appendChild(actions);
+
+                resultsDiv.appendChild(item);
+            }
+        } catch (err) {
+            resultsDiv.textContent = 'Search failed';
+            console.error('Asset search failed', err);
+        }
+    }
+
+    private async fetchAndPlace(record: any) {
+        // Ask server to download and cache the remote model
+        const resultsDiv = this.panel?.querySelector('#asset-browser-results') as HTMLElement;
+        if (resultsDiv) resultsDiv.textContent = 'Downloading model...';
+
+        try {
+            const resp = await fetch(`${this.serverBase}/download`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url: record.url })
+            });
+            const payload = await resp.json();
+            if (!payload.ok) throw new Error(payload.error || 'download failed');
+
+            const localPath = payload.localPath; // e.g. /assets/Buggy.gltf
+            const absoluteUrl = this.serverBase + localPath;
+
+            // Build metadata object for AssetManager
+            const metadata: AssetMetadata = {
+                id: `${record.id}_${Date.now()}`,
+                name: record.name || record.id,
+                description: record.description || '',
+                source: 'local',
+                url: absoluteUrl,
+                thumbnailUrl: record.thumbnailUrl,
+                tags: record.tags || []
+            };
+
+            // Preload model to calculate bounding box / size
+            resultsDiv.textContent = 'Loading model into scene (preview)...';
+            await this.assetManager.loadAsset(metadata);
+
+            // Enter placement mode
+            resultsDiv.textContent = 'Click on terrain to place the model or press ESC to cancel';
+            this.selectedMetadata = metadata;
+            this.domElement.style.cursor = 'crosshair';
+
+            const onClick = (ev: MouseEvent) => this.onCanvasClick(ev, onClick, onEsc);
+            const onEsc = (ev: KeyboardEvent) => {
+                if (ev.key === 'Escape') {
+                    this.cancelPlacement(onClick, onEsc);
+                }
+            };
+
+            this.domElement.addEventListener('click', onClick);
+            window.addEventListener('keydown', onEsc);
+        } catch (err) {
+            console.error('Fetch & place failed', err);
+            if (resultsDiv) resultsDiv.textContent = 'Failed to download or load model';
+        }
+    }
+
+    // Selection: allow clicking existing placed meshes to edit them
+    private setupSelectionListener() {
+        this.domElement.addEventListener('pointerdown', (ev) => {
+            // Ignore when in placement mode
+            if (this.selectedMetadata) return;
+
+            const rect = (this.domElement as HTMLCanvasElement).getBoundingClientRect();
+            const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+            const y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+            const mouse = new THREE.Vector2(x, y);
+            this.raycaster.setFromCamera(mouse, this.camera);
+
+            const intersects = this.raycaster.intersectObjects(this.assetManager['scene'].children, true);
+            if (intersects.length === 0) return;
+            const first = intersects[0];
+            // Ask AssetManager to find placed asset for this object
+            const placed = this.assetManager.findPlacedAssetByObject(first.object);
+            if (!placed) return;
+
+            this.showTransformEditor(placed);
+        });
+    }
+
+    private showTransformEditor(placed: any) {
+        this.selectedPlacedId = placed.id;
+        // Create simple floating panel
+        let panel = document.getElementById('asset-transform-panel') as HTMLElement | null;
+        if (panel) panel.remove();
+
+        panel = document.createElement('div');
+        panel.id = 'asset-transform-panel';
+        panel.style.position = 'fixed';
+        panel.style.left = '10px';
+        panel.style.bottom = '10px';
+        panel.style.background = 'rgba(0,0,0,0.85)';
+        panel.style.color = 'white';
+        panel.style.padding = '10px';
+        panel.style.zIndex = '1000';
+        panel.style.borderRadius = '6px';
+
+        const title = document.createElement('div');
+        title.textContent = `Edit: ${placed.metadata.name}`;
+        title.style.fontWeight = 'bold';
+        title.style.marginBottom = '6px';
+        panel.appendChild(title);
+
+        const fields: { label: string; value: string }[] = [];
+        const pos = placed.position;
+        const rot = placed.rotation;
+        const scl = placed.scale;
+
+        const makeInput = (label: string, value: string, onChange: (v: string) => void) => {
+            const row = document.createElement('div');
+            row.style.display = 'flex';
+            row.style.gap = '6px';
+            row.style.marginBottom = '6px';
+            const lab = document.createElement('div');
+            lab.textContent = label;
+            lab.style.width = '60px';
+            const inp = document.createElement('input');
+            inp.value = value;
+            inp.style.flex = '1';
+            inp.addEventListener('change', () => onChange(inp.value));
+            row.appendChild(lab);
+            row.appendChild(inp);
+            panel!.appendChild(row);
+            return inp;
+        };
+
+        // Position
+        makeInput('pos x', pos.x.toFixed(2), (v) => this.updatePlaced({ x: parseFloat(v) }, 'position'));
+        makeInput('pos y', pos.y.toFixed(2), (v) => this.updatePlaced({ y: parseFloat(v) }, 'position'));
+        makeInput('pos z', pos.z.toFixed(2), (v) => this.updatePlaced({ z: parseFloat(v) }, 'position'));
+
+        // Rotation (degrees)
+        makeInput('rot x', (rot.x * 180 / Math.PI).toFixed(1), (v) => this.updatePlaced({ x: parseFloat(v) * Math.PI / 180 }, 'rotation'));
+        makeInput('rot y', (rot.y * 180 / Math.PI).toFixed(1), (v) => this.updatePlaced({ y: parseFloat(v) * Math.PI / 180 }, 'rotation'));
+        makeInput('rot z', (rot.z * 180 / Math.PI).toFixed(1), (v) => this.updatePlaced({ z: parseFloat(v) * Math.PI / 180 }, 'rotation'));
+
+        // Scale
+        makeInput('scl x', scl.x.toFixed(2), (v) => this.updatePlaced({ x: parseFloat(v) }, 'scale'));
+        makeInput('scl y', scl.y.toFixed(2), (v) => this.updatePlaced({ y: parseFloat(v) }, 'scale'));
+        makeInput('scl z', scl.z.toFixed(2), (v) => this.updatePlaced({ z: parseFloat(v) }, 'scale'));
+
+        const removeBtn = document.createElement('button');
+        removeBtn.textContent = 'Remove';
+        removeBtn.style.marginTop = '6px';
+        removeBtn.addEventListener('click', () => {
+            this.assetManager.removeAsset(placed.id);
+            panel?.remove();
+        });
+        panel.appendChild(removeBtn);
+
+        const closeBtn = document.createElement('button');
+        closeBtn.textContent = 'Close';
+        closeBtn.style.marginLeft = '6px';
+        closeBtn.addEventListener('click', () => panel?.remove());
+        panel.appendChild(closeBtn);
+
+        this.container.appendChild(panel);
+    }
+
+    private updatePlaced(vals: { x?: number; y?: number; z?: number }, kind: 'position' | 'rotation' | 'scale') {
+        if (!this.selectedPlacedId) return;
+        const placed = this.assetManager.getPlacedAssets().find(p => p.id === this.selectedPlacedId);
+        if (!placed) return;
+
+        if (kind === 'position') {
+            const p = placed.position.clone();
+            if (typeof vals.x === 'number') p.x = vals.x;
+            if (typeof vals.y === 'number') p.y = vals.y;
+            if (typeof vals.z === 'number') p.z = vals.z;
+            this.assetManager.updatePlacedAssetTransforms(placed.id, { position: p });
+        } else if (kind === 'rotation') {
+            const r = placed.rotation.clone();
+            if (typeof vals.x === 'number') r.x = vals.x;
+            if (typeof vals.y === 'number') r.y = vals.y;
+            if (typeof vals.z === 'number') r.z = vals.z;
+            this.assetManager.updatePlacedAssetTransforms(placed.id, { rotation: r });
+        } else if (kind === 'scale') {
+            const s = placed.scale.clone();
+            if (typeof vals.x === 'number') s.x = vals.x;
+            if (typeof vals.y === 'number') s.y = vals.y;
+            if (typeof vals.z === 'number') s.z = vals.z;
+            this.assetManager.updatePlacedAssetTransforms(placed.id, { scale: s });
+        }
+    }
+
+    private cancelPlacement(onClick: (ev: MouseEvent) => void, onEsc: (ev: KeyboardEvent) => void) {
+        this.selectedMetadata = undefined;
+        this.domElement.style.cursor = 'default';
+        this.domElement.removeEventListener('click', onClick);
+        window.removeEventListener('keydown', onEsc);
+        const resultsDiv = this.panel?.querySelector('#asset-browser-results') as HTMLElement;
+        if (resultsDiv) resultsDiv.textContent = 'Placement cancelled';
+    }
+
+    private async onCanvasClick(ev: MouseEvent, onClick: (ev: MouseEvent) => void, onEsc: (ev: KeyboardEvent) => void) {
+        ev.preventDefault();
+        if (!this.selectedMetadata) return;
+
+        const rect = (this.domElement as HTMLCanvasElement).getBoundingClientRect();
+        const x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+        const y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+
+        const mouse = new THREE.Vector2(x, y);
+        this.raycaster.setFromCamera(mouse, this.camera);
+
+        // Intersect terrain mesh (named 'terrain')
+        const intersects = this.raycaster.intersectObjects(this.assetManager['scene'].children, true);
+        let point: THREE.Vector3 | null = null;
+        for (const i of intersects) {
+            if (i.object && i.object.name === 'terrain') {
+                point = i.point.clone();
+                break;
+            }
+        }
+
+        // Fallback: use first intersection
+        if (!point && intersects.length > 0) {
+            point = intersects[0].point.clone();
+        }
+
+        // If still no intersection, place near camera
+        if (!point) {
+            const camPos = (this.camera as THREE.PerspectiveCamera).position;
+            point = new THREE.Vector3(camPos.x + 10, camPos.y - 2, camPos.z);
+        }
+
+        // Adjust Y to terrain height if terrainGenerator is available on AssetManager
+        const tg: any = (this.assetManager as any).terrainGenerator;
+        if (tg && typeof tg.getHeightAtPosition === 'function') {
+            const h = tg.getHeightAtPosition(point.x, point.z);
+            point.y = h;
+        }
+
+        try {
+            await this.assetManager.placeAsset(this.selectedMetadata, point);
+            const resultsDiv = this.panel?.querySelector('#asset-browser-results') as HTMLElement;
+            if (resultsDiv) resultsDiv.textContent = 'Placed model';
+        } catch (err) {
+            console.error('Placement failed', err);
+            const resultsDiv = this.panel?.querySelector('#asset-browser-results') as HTMLElement;
+            if (resultsDiv) resultsDiv.textContent = 'Failed to place model';
+        }
+
+        // Cleanup listeners
+        this.domElement.style.cursor = 'default';
+        this.domElement.removeEventListener('click', onClick);
+        window.removeEventListener('keydown', onEsc);
+        this.selectedMetadata = undefined;
+    }
+}
