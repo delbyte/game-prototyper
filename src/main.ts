@@ -7,6 +7,8 @@ import { setupUI } from './ui';
 import { TerrainGenerator } from './terrain';
 import { updateMovement } from './player';
 import { state } from './state';
+import { AssetManager } from './asset-manager';
+import { AssetBrowserClient } from './asset-browser-client';
 import { sampleTerrainParameters } from './sample-terrain-parameters';
 
 const { renderer, scene } = initRenderer(sampleTerrainParameters.skybox, sampleTerrainParameters.lighting);
@@ -15,6 +17,11 @@ const terrainGenerator = new TerrainGenerator(sampleTerrainParameters);
 const terrain = terrainGenerator.generateTerrain();
 terrain.name = 'terrain';
 scene.add(terrain);
+
+// Asset manager + UI
+const assetManager = new AssetManager(scene, terrainGenerator);
+// Use the existing camera returned earlier
+new AssetBrowserClient(assetManager, camera, renderer.domElement, 'http://localhost:3001', document.body);
 
 setupControls(renderer.domElement);
 setupUI(terrainGenerator, scene);
