@@ -12,24 +12,28 @@ export function updateMovement(terrainGenerator: TerrainGenerator) {
 
     forward.applyQuaternion(
         new THREE.Quaternion().setFromEuler(
-            new THREE.Euler(0, state.cameraRotation.y, 0)
+            new THREE.Euler(0, state.cameraRotation?.y || 0, 0)
         )
     );
     right.crossVectors(forward, new THREE.Vector3(0, 1, 0));
 
     // WASD movement
-    if (state.keys['KeyW']) moveVector.add(forward);
-    if (state.keys['KeyS']) moveVector.sub(forward);
-    if (state.keys['KeyA']) moveVector.sub(right);
-    if (state.keys['KeyD']) moveVector.add(right);
+    if (state.keys) {
+        if (state.keys['KeyW']) moveVector.add(forward);
+        if (state.keys['KeyS']) moveVector.sub(forward);
+        if (state.keys['KeyA']) moveVector.sub(right);
+        if (state.keys['KeyD']) moveVector.add(right);
+    }
 
     moveVector.normalize();
-    moveVector.multiplyScalar(state.moveSpeed);
+    moveVector.multiplyScalar(state.moveSpeed || 0);
 
     if (state.controlMode === 'camera') {
         // Free camera movement
-        if (state.keys['KeyQ']) moveVector.y -= state.moveSpeed;
-        if (state.keys['KeyE']) moveVector.y += state.moveSpeed;
+        if (state.keys) {
+            if (state.keys['KeyQ']) moveVector.y -= (state.moveSpeed || 0);
+            if (state.keys['KeyE']) moveVector.y += (state.moveSpeed || 0);
+        }
 
         state.cameraPosition.add(moveVector);
     } else {
@@ -40,31 +44,36 @@ export function updateMovement(terrainGenerator: TerrainGenerator) {
 
 function updatePlayerMovement(moveVector: THREE.Vector3, terrainGenerator: TerrainGenerator) {
     // Apply horizontal movement
-    state.cameraPosition.x += moveVector.x;
-    state.cameraPosition.z += moveVector.z;
+    if (state.cameraPosition) {
+        state.cameraPosition.x += moveVector.x;
+        state.cameraPosition.z += moveVector.z;
+    }
 
     // Jump
     if (state.jump && state.isGrounded) {
-        state.velocity.y += 0.2; // Jump impulse
+        if (state.velocity) state.velocity.y += 0.2; // Jump impulse
         state.isGrounded = false;
         state.jump = false;
     }
 
     // Apply gravity
-    state.velocity.y += state.gravity * 0.016; // Assuming 60fps
-    state.cameraPosition.y += state.velocity.y;
+    if (state.velocity) state.velocity.y += (state.gravity || 0) * 0.016; // Assuming 60fps
+    if (state.cameraPosition && state.velocity) state.cameraPosition.y += state.velocity.y;
 
     // Ground collision
-    const groundHeight = terrainGenerator.getHeightAtPosition(
-        state.cameraPosition.x,
-        state.cameraPosition.z
-    );
+    if (state.cameraPosition) {
+        const groundHeight = terrainGenerator.getHeightAtPosition(
+            state.cameraPosition.x,
+            state.cameraPosition.z
+        );
 
-    if (state.cameraPosition.y <= groundHeight + state.playerHeight) {
-        state.cameraPosition.y = groundHeight + state.playerHeight;
-        state.velocity.y = 0;
-        state.isGrounded = true;
-    } else {
-        state.isGrounded = false;
+        const playerHeight = state.playerHeight || 1.8; // Default player height
+        if (state.cameraPosition.y <= groundHeight + playerHeight) {
+            state.cameraPosition.y = groundHeight + playerHeight;
+            if (state.velocity) state.velocity.y = 0;
+            state.isGrounded = true;
+        } else {
+            state.isGrounded = false;
+        }
     }
 }
