@@ -1,7 +1,40 @@
 import * as THREE from 'three';
 import { PerlinNoise } from './noise';
 
+interface BiomeColor {
+    r: number;
+    g: number;
+    b: number;
+}
+
+interface Biome {
+    name: string;
+    noiseScale: number;
+    octaves: number;
+    persistence: number;
+    lacunarity: number;
+    heightMultiplier: number;
+    baseHeight: number;
+    colors: {
+        low: BiomeColor;
+        mid: BiomeColor;
+        high: BiomeColor;
+    };
+}
+
 export class TerrainGenerator {
+    noise: PerlinNoise;
+    biomeNoise: PerlinNoise;
+    width: number;
+    depth: number;
+    maxHeight: number;
+    segments: number;
+    biomeScale: number;
+    biomes: { [key: string]: Biome };
+    biomeList: string[];
+    mesh: THREE.Mesh | null;
+    heightMap: number[][];
+
     constructor(params: any = null) {
         this.noise = new PerlinNoise();
         this.biomeNoise = new PerlinNoise(); // Separate noise for biome distribution
@@ -13,7 +46,7 @@ export class TerrainGenerator {
             this.segments = params.global.segments;
             this.biomeScale = params.global.biomeScale;
             this.biomes = {};
-            params.biomes.forEach(biome => {
+            params.biomes.forEach((biome: Biome) => {
                 this.biomes[biome.name] = biome;
             });
         } else {
