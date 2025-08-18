@@ -19,12 +19,5 @@ scene.add(terrain);
 setupControls(renderer.domElement);
 setupUI(terrainGenerator, scene);
 
-startAnimationLoop(() => {
-    updateMovement(terrainGenerator);
-    if (state.cameraPosition) {
-        camera.position.copy(state.cameraPosition);
-    }
-    if (state.cameraRotation) {
-        camera.rotation.set(state.cameraRotation.x || 0, state.cameraRotation.y || 0, 0);
-    }
-});
+// Start the animation loop and provide the TerrainGenerator instance
+startAnimationLoop(terrainGenerator);
