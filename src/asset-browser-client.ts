@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import { AssetManager } from './asset-manager';
 import type { AssetMetadata } from './asset-manager';
+import { searchSketchfab, getSketchfabModelDownloadUrl } from './api';
+import type { Asset } from './types';
 
 export class AssetBrowserClient {
     private assetManager: AssetManager;
     private camera: THREE.Camera;
     private domElement: HTMLElement;
-    private serverBase: string;
     private container: HTMLElement;
     private panel?: HTMLElement;
     private selectedMetadata?: AssetMetadata;
@@ -18,15 +19,14 @@ export class AssetBrowserClient {
     private pointerDownPos: { x: number; y: number } | null = null;
     private dragMoved = false;
 
-    constructor(assetManager: AssetManager, camera: THREE.Camera, domElement: HTMLElement, serverBase = 'http://localhost:3001', container: HTMLElement = document.body) {
+    constructor(assetManager: AssetManager, camera: THREE.Camera, domElement: HTMLElement, container: HTMLElement = document.body) {
         this.assetManager = assetManager;
         this.camera = camera;
         this.domElement = domElement;
-        this.serverBase = serverBase.replace(/\/$/, '');
         this.container = container;
 
         this.createButton();
-    this.setupSelectionListener();
+        this.setupSelectionListener();
     }
 
     private createButton() {
@@ -113,10 +113,7 @@ export class AssetBrowserClient {
         resultsDiv.innerHTML = 'Searching...';
 
         try {
-            const url = `${this.serverBase}/search?q=${encodeURIComponent(query)}`;
-            const resp = await fetch(url);
-            const payload = await resp.json();
-            const results: any[] = payload.results || [];
+            const results = await searchSketchfab(query);
 
             resultsDiv.innerHTML = '';
             if (results.length === 0) {
@@ -170,30 +167,23 @@ export class AssetBrowserClient {
         }
     }
 
-    private async fetchAndPlace(record: any) {
-        // Ask server to download and cache the remote model
+    private async fetchAndPlace(record: Asset) {
         const resultsDiv = this.panel?.querySelector('#asset-browser-results') as HTMLElement;
         if (resultsDiv) resultsDiv.textContent = 'Downloading model...';
 
         try {
-            const resp = await fetch(`${this.serverBase}/download`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ url: record.url })
-            });
-            const payload = await resp.json();
-            if (!payload.ok) throw new Error(payload.error || 'download failed');
-
-            const localPath = payload.localPath; // e.g. /assets/Buggy.gltf
-            const absoluteUrl = this.serverBase + localPath;
+            const downloadUrl = await getSketchfabModelDownloadUrl(record.id);
+            if (!downloadUrl) {
+                throw new Error('Could not get download URL');
+            }
 
             // Build metadata object for AssetManager
             const metadata: AssetMetadata = {
                 id: `${record.id}_${Date.now()}`,
                 name: record.name || record.id,
                 description: record.description || '',
-                source: 'local',
-                url: absoluteUrl,
+                source: 'sketchfab',
+                url: downloadUrl,
                 thumbnailUrl: record.thumbnailUrl,
                 tags: record.tags || []
             };
