@@ -32,6 +32,11 @@ export class TerrainGenerator {
     biomeScale: number;
     biomes: { [key: string]: Biome };
     biomeList: string[];
+    // Optional dominant biome index or name and coverage fraction (0.5-0.95)
+    dominantBiome: number | string | null;
+    dominantCoverage: number;
+    // Optional elevation color bands applied after biome color blending
+    elevationColorBands: Array<{ min: number; max: number; color: BiomeColor }>;
     mesh: THREE.Mesh | null;
     heightMap: number[][];
 
@@ -130,28 +135,65 @@ export class TerrainGenerator {
         }
 
         this.biomeList = Object.keys(this.biomes);
+        // Read optional dominant biome and coverage from params
+        if (params && params.dominantBiome != null) {
+            // Accept either a numeric index or a biome name
+            this.dominantBiome = params.dominantBiome;
+        } else {
+            this.dominantBiome = null;
+        }
+        this.dominantCoverage = params && typeof params.dominantCoverage === 'number' ? Math.min(Math.max(params.dominantCoverage, 0.5), 0.95) : 0.6;
+
+        // Elevation color bands (optional): array of {min, max, color}
+        this.elevationColorBands = (params && Array.isArray(params.elevationColorBands)) ? params.elevationColorBands : [];
         
         this.mesh = null;
         this.heightMap = [];
     }
 
     // Determine biome at a given world position
-    getBiomeAtPosition(worldX, worldZ) {
+    getBiomeAtPosition(worldX: number, worldZ: number): Biome {
         // Use biome noise to determine which biome this position belongs to
         const biomeValue = this.biomeNoise.fractalNoise(worldX, worldZ, 3, 0.5, this.biomeScale);
         
         // Map noise value to biome index
         const normalizedValue = (biomeValue + 1) / 2; // Convert from [-1,1] to [0,1]
+
+        // If a dominant biome is specified, bias the mapping so the dominant biome occupies ~dominantCoverage of the map
+        if (this.dominantBiome != null) {
+            // Resolve dominant biome index
+            let dominantIndex: number;
+            if (typeof this.dominantBiome === 'number') {
+                dominantIndex = Math.max(0, Math.min(this.biomeList.length - 1, Math.round(this.dominantBiome)));
+            } else {
+                dominantIndex = this.biomeList.indexOf(String(this.dominantBiome));
+                if (dominantIndex === -1) dominantIndex = 0;
+            }
+
+            const coverage = Math.min(Math.max(this.dominantCoverage || 0.6, 0.5), 0.95);
+
+            if (normalizedValue < coverage) {
+                return this.biomes[this.biomeList[dominantIndex]];
+            } else {
+                // Map the remaining [coverage,1] range to the other biomes
+                const other = this.biomeList.filter((_, i) => i !== dominantIndex);
+                if (other.length === 0) return this.biomes[this.biomeList[dominantIndex]];
+                const remapped = (normalizedValue - coverage) / (1 - coverage); // [0,1]
+                const idx = Math.floor(remapped * other.length);
+                const clampedIdx = Math.max(0, Math.min(other.length - 1, idx));
+                return this.biomes[other[clampedIdx]];
+            }
+        }
+
         const biomeIndex = Math.floor(normalizedValue * this.biomeList.length);
         const clampedIndex = Math.max(0, Math.min(this.biomeList.length - 1, biomeIndex));
-        
         return this.biomes[this.biomeList[clampedIndex]];
     }
 
     // Blend between biomes for smooth transitions
-    getBlendedBiomeParams(worldX, worldZ) {
+    getBlendedBiomeParams(worldX: number, worldZ: number) {
         const sampleRadius = 100; // Distance to sample for blending
-        const samples = [
+        const samples: Array<{ x: number; z: number; weight: number }> = [
             { x: worldX, z: worldZ, weight: 4 }, // Center sample has more weight
             { x: worldX + sampleRadius, z: worldZ, weight: 1 },
             { x: worldX - sampleRadius, z: worldZ, weight: 1 },
@@ -163,31 +205,31 @@ export class TerrainGenerator {
             { x: worldX + sampleRadius * 0.7, z: worldZ - sampleRadius * 0.7, weight: 0.5 },
             { x: worldX - sampleRadius * 0.7, z: worldZ + sampleRadius * 0.7, weight: 0.5 }
         ];
-        
-        const biomeInfluences = {};
+
+        const biomeInfluences: Record<string, { biome: Biome; weight: number }> = {};
         let totalWeight = 0;
-        
+
         // Calculate influence of each biome at this position
         samples.forEach(sample => {
             const biome = this.getBiomeAtPosition(sample.x, sample.z);
             const distance = Math.sqrt((sample.x - worldX) ** 2 + (sample.z - worldZ) ** 2);
             const falloff = Math.exp(-distance / (sampleRadius * 0.5)); // Exponential falloff
             const weight = sample.weight * falloff;
-            
+
             if (!biomeInfluences[biome.name]) {
                 biomeInfluences[biome.name] = { biome: biome, weight: 0 };
             }
             biomeInfluences[biome.name].weight += weight;
             totalWeight += weight;
         });
-        
+
         // Normalize weights
         Object.values(biomeInfluences).forEach(influence => {
             influence.weight /= totalWeight;
         });
-        
+
         // Blend biome parameters based on influences
-        const blendedParams = {
+        const blendedParams: any = {
             noiseScale: 0,
             octaves: 0,
             persistence: 0,
@@ -200,30 +242,30 @@ export class TerrainGenerator {
                 high: { r: 0, g: 0, b: 0 }
             }
         };
-        
+
         // Weighted average of all biome parameters
         Object.values(biomeInfluences).forEach(influence => {
             const biome = influence.biome;
             const weight = influence.weight;
-            
+
             blendedParams.noiseScale += biome.noiseScale * weight;
             blendedParams.octaves += biome.octaves * weight;
             blendedParams.persistence += biome.persistence * weight;
             blendedParams.lacunarity += biome.lacunarity * weight;
             blendedParams.heightMultiplier += biome.heightMultiplier * weight;
             blendedParams.baseHeight += biome.baseHeight * weight;
-            
+
             // Blend colors
-            ['low', 'mid', 'high'].forEach(level => {
+            (['low', 'mid', 'high'] as Array<'low' | 'mid' | 'high'>).forEach(level => {
                 blendedParams.colors[level].r += biome.colors[level].r * weight;
                 blendedParams.colors[level].g += biome.colors[level].g * weight;
                 blendedParams.colors[level].b += biome.colors[level].b * weight;
             });
         });
-        
+
         // Round octaves to nearest integer (can't have fractional octaves)
         blendedParams.octaves = Math.round(blendedParams.octaves);
-        
+
         return blendedParams;
     }
 
@@ -232,7 +274,7 @@ export class TerrainGenerator {
         this.heightMap = [];
         const vertices = [];
         const indices = [];
-        const normals = [];
+    const normals: number[] = [];
         const uvs = [];
         const colors = [];
 
@@ -306,7 +348,13 @@ export class TerrainGenerator {
         // Create mesh
         if (this.mesh) {
             this.mesh.geometry.dispose();
-            this.mesh.material.dispose();
+            // Material can be an array or a single material; guard dispose calls
+            const mat: any = this.mesh.material;
+            if (Array.isArray(mat)) {
+                mat.forEach((m: any) => m && typeof m.dispose === 'function' && m.dispose());
+            } else if (mat && typeof mat.dispose === 'function') {
+                mat.dispose();
+            }
         }
         
         this.mesh = new THREE.Mesh(geometry, material);
@@ -316,30 +364,54 @@ export class TerrainGenerator {
         return this.mesh;
     }
 
-    getBiomeTerrainColor(height, biome) {
+    getBiomeTerrainColor(height: number, biome: Biome) {
         // Use biome-specific colors based on height
+        let baseColor;
         if (height < 0.4) {
-            return biome.colors.low;
+            baseColor = biome.colors.low;
         } else if (height < 0.7) {
             // Interpolate between low and mid colors
             const t = (height - 0.4) / 0.3;
-            return {
+            baseColor = {
                 r: biome.colors.low.r + t * (biome.colors.mid.r - biome.colors.low.r),
                 g: biome.colors.low.g + t * (biome.colors.mid.g - biome.colors.low.g),
                 b: biome.colors.low.b + t * (biome.colors.mid.b - biome.colors.low.b)
             };
         } else {
             // Interpolate between mid and high colors
-            const t = (height - 0.7) / 0.3;
-            return {
+            const t = Math.min(1, (height - 0.7) / 0.3);
+            baseColor = {
                 r: biome.colors.mid.r + t * (biome.colors.high.r - biome.colors.mid.r),
                 g: biome.colors.mid.g + t * (biome.colors.high.g - biome.colors.mid.g),
                 b: biome.colors.mid.b + t * (biome.colors.high.b - biome.colors.mid.b)
             };
         }
+
+        // Apply elevation color bands (global overrides based on normalized height)
+        return this.applyElevationBands(baseColor, height);
     }
 
-    getTerrainColor(height) {
+    applyElevationBands(baseColor: BiomeColor, normalizedHeight: number) {
+        if (!this.elevationColorBands || this.elevationColorBands.length === 0) return baseColor;
+
+        // Find the first band that matches the normalized height
+        for (const band of this.elevationColorBands) {
+            if (normalizedHeight >= band.min && normalizedHeight <= band.max) {
+                // Calculate blend weight inside band (0..1)
+                const t = (normalizedHeight - band.min) / Math.max(1e-6, (band.max - band.min));
+                // Blend baseColor towards band.color
+                return {
+                    r: baseColor.r * (1 - t) + band.color.r * t,
+                    g: baseColor.g * (1 - t) + band.color.g * t,
+                    b: baseColor.b * (1 - t) + band.color.b * t
+                };
+            }
+        }
+
+        return baseColor;
+    }
+
+    getTerrainColor(height: number) {
         // Define color gradient based on height
         if (height < 0.2) {
             // Water/low areas - blue
