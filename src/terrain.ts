@@ -272,11 +272,11 @@ export class TerrainGenerator {
     generateTerrain() {
         // Generate height map
         this.heightMap = [];
-        const vertices = [];
-        const indices = [];
-    const normals: number[] = [];
-        const uvs = [];
-        const colors = [];
+        const vertices: number[] = [];
+        const indices: number[] = [];
+        const normals: number[] = [];
+    const uvs: number[] = [];
+    const colors: number[] = [];
 
         // Generate vertices
         for (let z = 0; z <= this.segments; z++) {
@@ -431,7 +431,7 @@ export class TerrainGenerator {
         }
     }
 
-    calculateNormals(vertices, indices, normals) {
+    calculateNormals(vertices: number[], indices: number[], normals: number[]): void {
         // Initialize normals array
         for (let i = 0; i < vertices.length; i++) {
             normals[i] = 0;
@@ -480,7 +480,7 @@ export class TerrainGenerator {
         }
     }
 
-    getHeightAtPosition(x, z) {
+    getHeightAtPosition(x: number, z: number): number {
         // Convert world coordinates to grid coordinates
         const gridX = (x + this.width / 2) / this.width * this.segments;
         const gridZ = (z + this.depth / 2) / this.depth * this.segments;
@@ -520,7 +520,7 @@ export class TerrainGenerator {
             this.segments = params.global.segments;
             this.biomeScale = params.global.biomeScale;
             this.biomes = {};
-            params.biomes.forEach(biome => {
+            params.biomes.forEach((biome: Biome) => {
                 this.biomes[biome.name] = biome;
             });
             this.biomeList = Object.keys(this.biomes);
