@@ -1,10 +1,11 @@
-declare module './terrain.ts' {
-  export class TerrainGenerator {
-    constructor();
-    generateTerrain(): any;
-    regenerate(): any;
-    getHeightAtPosition(x: number, z: number): number;
-  }
+export interface Asset {
+  id: string;
+  name: string;
+  description: string;
+  source: string;
+  url: string;
+  thumbnailUrl: string;
+  tags: string[];
 }
 
 declare module './noise.ts' {
