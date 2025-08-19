@@ -1,7 +1,63 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
+import type { Asset } from "./types";
 
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(API_KEY);
+
+const SKETCHFAB_API_URL = 'https://api.sketchfab.com/v3';
+const SKETCHFAB_API_TOKEN = import.meta.env.VITE_SKETCHFAB_API_TOKEN;
+
+export async function searchSketchfab(query: string): Promise<Asset[]> {
+    if (!SKETCHFAB_API_TOKEN) {
+        console.warn('Sketchfab API token not set. Falling back to sample assets.');
+        return fetch('/server/sample-assets.json').then(res => res.json());
+    }
+
+    const response = await fetch(`${SKETCHFAB_API_URL}/search?type=models&q=${query}&downloadable=true`, {
+        headers: {
+            Authorization: `Token ${SKETCHFAB_API_TOKEN}`,
+        },
+    });
+
+    if (!response.ok) {
+        console.error('Sketchfab API error:', response.status, response.statusText);
+        return fetch('/server/sample-assets.json').then(res => res.json());
+    }
+
+    const data = await response.json();
+
+    return data.results.map((model: any) => ({
+        id: model.uid,
+        name: model.name,
+        description: model.description,
+        source: 'sketchfab',
+        url: model.viewerUrl,
+        thumbnailUrl: model.thumbnails.images[0].url,
+        tags: model.tags.map((tag: any) => tag.name),
+    }));
+}
+
+export async function getSketchfabModelDownloadUrl(uid: string): Promise<string | null> {
+    if (!SKETCHFAB_API_TOKEN) {
+        console.error('Sketchfab API token not set.');
+        return null;
+    }
+
+    const response = await fetch(`${SKETCHFAB_API_URL}/models/${uid}/download`, {
+        headers: {
+            Authorization: `Token ${SKETCHFAB_API_TOKEN}`,
+        },
+    });
+
+    if (!response.ok) {
+        console.error('Failed to get Sketchfab model download URL:', response.status, response.statusText);
+        return null;
+    }
+
+    const data = await response.json();
+    return data.gltf?.url;
+}
+
 
 export async function generateTerrainParameters(prompt: string): Promise<any> {
     try {
