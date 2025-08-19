@@ -21,7 +21,7 @@ scene.add(terrain);
 // Asset manager + UI
 const assetManager = new AssetManager(scene, terrainGenerator);
 // Use the existing camera returned earlier
-new AssetBrowserClient(assetManager, camera, renderer.domElement, 'http://localhost:3001', document.body);
+new AssetBrowserClient(assetManager, camera, renderer.domElement, document.body);
 
 setupControls(renderer.domElement);
 setupUI(terrainGenerator, scene);
