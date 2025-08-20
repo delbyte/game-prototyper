@@ -37,25 +37,42 @@ export async function searchSketchfab(query: string): Promise<Asset[]> {
     }));
 }
 
-export async function getSketchfabModelDownloadUrl(uid: string): Promise<string | null> {
+export async function getSketchfabModelDownloadUrl(uid: string): Promise<{ url: string; size: number } | null> {
     if (!SKETCHFAB_API_TOKEN) {
         console.error('Sketchfab API token not set.');
         return null;
     }
 
+    // Use 'Bearer' as per the new documentation
     const response = await fetch(`${SKETCHFAB_API_URL}/models/${uid}/download`, {
         headers: {
-            Authorization: `Token ${SKETCHFAB_API_TOKEN}`,
+            Authorization: `Bearer ${SKETCHFAB_API_TOKEN}`,
         },
+        mode: 'cors'
     });
 
     if (!response.ok) {
         console.error('Failed to get Sketchfab model download URL:', response.status, response.statusText);
+        // Log the response body for more details if available
+        try {
+            const errorBody = await response.json();
+            console.error('Error details:', errorBody);
+        } catch (e) {
+            // response body might not be json
+        }
         return null;
     }
 
     const data = await response.json();
-    return data.gltf?.url;
+    
+    // The new docs show the response is an object with gltf, usdz, etc.
+    // We want the gltf object which contains the url and size.
+    if (data.gltf) {
+        return data.gltf;
+    } else {
+        console.error('No glTF download available for this model.');
+        return null;
+    }
 }
 
 
