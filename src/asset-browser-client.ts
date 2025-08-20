@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { AssetManager } from './asset-manager';
 import type { AssetMetadata } from './asset-manager';
-import { searchSketchfab, getSketchfabModelDownloadUrl } from './api';
+import { searchSketchfab } from './api';
 import type { Asset } from './types';
 
 export class AssetBrowserClient {
@@ -172,18 +172,14 @@ export class AssetBrowserClient {
         if (resultsDiv) resultsDiv.textContent = 'Downloading model...';
 
         try {
-            const downloadUrl = await getSketchfabModelDownloadUrl(record.id);
-            if (!downloadUrl) {
-                throw new Error('Could not get download URL');
-            }
-
-            // Build metadata object for AssetManager
+            // Build metadata object for AssetManager.
+            // The asset manager will now handle fetching the download URL internally.
             const metadata: AssetMetadata = {
-                id: `${record.id}_${Date.now()}`,
+                id: record.id, // Use the original Sketchfab UID
                 name: record.name || record.id,
                 description: record.description || '',
                 source: 'sketchfab',
-                url: downloadUrl,
+                url: record.url, // The persistent viewer URL
                 thumbnailUrl: record.thumbnailUrl,
                 tags: record.tags || []
             };
