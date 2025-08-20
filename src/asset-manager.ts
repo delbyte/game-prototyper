@@ -1,6 +1,9 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
+import { getSketchfabModelDownloadUrl } from './api';
 import type { TerrainGenerator } from './terrain';
+
+declare const zip: any;
 
 export interface AssetMetadata {
     id: string;
@@ -131,6 +134,110 @@ export class AssetManager {
         ];
     }
 
+    private async _loadSketchfabModel(metadata: AssetMetadata): Promise<THREE.Object3D> {
+        console.log(`Initiating Sketchfab download for: ${metadata.name}`);
+
+        // 1. Get the temporary download URL from the API
+        const downloadInfo = await getSketchfabModelDownloadUrl(metadata.id.replace(/_.*$/, '')); // Ensure we use the original UID
+        if (!downloadInfo || !downloadInfo.url) {
+            throw new Error(`Could not get download URL for Sketchfab model ${metadata.name}`);
+        }
+
+        console.log(`Got download URL, archive size: ${(downloadInfo.size / 1024 / 1024).toFixed(2)} MB`);
+
+        // 2. Unpack the ZIP archive using zip.js
+        // @ts-ignore - zip is a global from the script tag
+        const zipReader = new zip.HttpReader(downloadInfo.url);
+        // @ts-ignore
+        const reader = new zip.ZipReader(zipReader);
+        const entries = await reader.getEntries();
+        
+        const fileMap = new Map<string, string>();
+        let sceneFileContent: string | undefined;
+        let rootGltfFile: string | undefined;
+
+        if (entries.length > 0) {
+            // 3. Create blob URLs for each file
+            for (const entry of entries) {
+                if (entry.directory) continue;
+
+                const blob = await entry.getData(new zip.BlobWriter());
+                const blobUrl = URL.createObjectURL(blob);
+                fileMap.set(entry.filename, blobUrl);
+
+                // Find the root glTF/GLB file
+                if (entry.filename.toLowerCase().endsWith('.gltf')) {
+                    rootGltfFile = entry.filename;
+                    // 4. Read the scene.gltf file content for rewriting
+                    sceneFileContent = await entry.getData(new zip.TextWriter());
+                } else if (entry.filename.toLowerCase().endsWith('.glb') && !rootGltfFile) {
+                    // Use GLB as a fallback, though it doesn't need rewriting
+                    rootGltfFile = entry.filename;
+                }
+            }
+        }
+        await reader.close();
+
+        if (!rootGltfFile) {
+            throw new Error('No .gltf or .glb file found in the Sketchfab archive.');
+        }
+
+        let finalUrl: string;
+
+        // 5. Rewrite paths in scene.gltf if it's a .gltf file
+        if (sceneFileContent && rootGltfFile.toLowerCase().endsWith('.gltf')) {
+            console.log('Rewriting paths in scene.gltf...');
+            const json = JSON.parse(sceneFileContent);
+
+            if (json.buffers) {
+                for (const buffer of json.buffers) {
+                    if (buffer.uri && fileMap.has(buffer.uri)) {
+                        buffer.uri = fileMap.get(buffer.uri)!;
+                    }
+                }
+            }
+
+            if (json.images) {
+                for (const image of json.images) {
+                    if (image.uri && fileMap.has(image.uri)) {
+                        image.uri = fileMap.get(image.uri)!;
+                    }
+                }
+            }
+
+            const updatedSceneFileContent = JSON.stringify(json);
+            const updatedBlob = new Blob([updatedSceneFileContent], { type: 'application/json' });
+            finalUrl = URL.createObjectURL(updatedBlob);
+            console.log('Path rewriting complete.');
+        } else {
+            // It's a GLB file, no rewriting needed. Use its blob URL directly.
+            finalUrl = fileMap.get(rootGltfFile)!;
+        }
+
+        // 6. Load the model using the final URL
+        console.log('Loading final processed model into GLTFLoader...');
+        return new Promise<THREE.Object3D>((resolve, reject) => {
+            this.loader.load(
+                finalUrl,
+                (gltf) => {
+                    console.log(`Successfully loaded model: ${metadata.name}`);
+                    // Clean up blob URLs after loading
+                    fileMap.forEach(url => URL.revokeObjectURL(url));
+                    URL.revokeObjectURL(finalUrl);
+                    resolve(gltf.scene);
+                },
+                undefined,
+                (error) => {
+                    console.error(`Failed to load processed Sketchfab model ${metadata.name}:`, error);
+                    // Clean up blob URLs on error
+                    fileMap.forEach(url => URL.revokeObjectURL(url));
+                    URL.revokeObjectURL(finalUrl);
+                    reject(error);
+                }
+            );
+        });
+    }
+
     /**
      * Load a 3D asset from URL
      */
@@ -138,6 +245,13 @@ export class AssetManager {
         // Check if already loaded
         if (this.loadedAssets.has(metadata.id)) {
             return this.loadedAssets.get(metadata.id)!.clone();
+        }
+
+        // Route to Sketchfab loader if necessary
+        if (metadata.source === 'sketchfab') {
+            const model = await this._loadSketchfabModel(metadata);
+            this.loadedAssets.set(metadata.id, model);
+            return model.clone();
         }
 
         console.log(`Loading asset: ${metadata.name} from ${metadata.url}`);
