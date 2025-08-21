@@ -3,35 +3,44 @@ export class PerlinNoise {
     seed: number;
     permutation: number[];
 
-    constructor(seed = Math.random()) {
-        this.seed = seed;
-        this.permutation = this.generatePermutation();
+    constructor(seed?: number) {
+        // Normalize seed to a number: use provided seed or a random 32-bit value
+        const s = typeof seed === 'number' && Number.isFinite(seed) ? seed : Math.floor(Math.random() * 0xffffffff);
+        // Use a numeric seed (integer)
+        this.seed = Math.floor(s);
+        // Build permutation deterministically using a local seeded PRNG so we don't mutate instance state during noise calls
+        this.permutation = this.generatePermutation(this.seed);
     }
 
-    generatePermutation() {
-        const p = [];
-        for (let i = 0; i < 256; i++) {
-            p[i] = i;
-        }
-        
-        // Simple shuffle using seed
+    // Mulberry32 seeded PRNG used locally to build the permutation table
+    private mulberry32(a: number) {
+        return function() {
+            a |= 0;
+            a = (a + 0x6D2B79F5) | 0;
+            let t = Math.imul(a ^ (a >>> 15), 1 | a);
+            t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    }
+
+    generatePermutation(seed: number) {
+        const rand = this.mulberry32(seed >>> 0);
+        const p: number[] = new Array(256);
+        for (let i = 0; i < 256; i++) p[i] = i;
+
+        // Fisher-Yates shuffle using local PRNG
         for (let i = 255; i > 0; i--) {
-            const j = Math.floor(this.random() * (i + 1));
-            [p[i], p[j]] = [p[j], p[i]];
+            const j = Math.floor(rand() * (i + 1));
+            const tmp = p[i];
+            p[i] = p[j];
+            p[j] = tmp;
         }
-        
-        // Duplicate permutation
-        for (let i = 0; i < 256; i++) {
-            p[256 + i] = p[i];
-        }
-        
-        return p;
-    }
 
-    random() {
-        // Simple seeded random number generator
-        const x = Math.sin(this.seed++) * 10000;
-        return x - Math.floor(x);
+        // Duplicate permutation
+        const perm: number[] = new Array(512);
+        for (let i = 0; i < 256; i++) perm[i] = p[i];
+        for (let i = 0; i < 256; i++) perm[256 + i] = p[i];
+        return perm;
     }
 
     fade(t: number) {
