@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Sketchfab OAuth Redirect</title>
+</head>
+<body>
+    <p>Processing Sketchfab login...</p>
+    <script>
+        // This script extracts the access token from the URL fragment
+        // and stores it in localStorage.
+
+        const params = new URLSearchParams(window.location.hash.substring(1));
+        const accessToken = params.get('access_token');
+
+        if (accessToken) {
+            localStorage.setItem('sketchfab_access_token', accessToken);
+            console.log('Sketchfab access token stored.');
+            // Optionally, redirect back to the main application or close the window
+            window.opener.postMessage('sketchfab_auth_success', window.location.origin);
+            window.close();
+        } else {
+            console.error('Sketchfab access token not found in URL fragment.');
+            document.body.textContent = 'Sketchfab login failed. Access token not found.';
+        }
+    </script>
+</body>
+</html>
