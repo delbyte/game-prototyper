@@ -15,4 +15,5 @@ export const state = {
     velocity: new THREE.Vector3(0, 0, 0),
     isGrounded: false,
     jump: false,
+    devMode: true,
 };
