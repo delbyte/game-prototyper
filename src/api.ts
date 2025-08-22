@@ -4,76 +4,7 @@ import type { Asset } from "./types";
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(API_KEY);
 
-const SKETCHFAB_API_URL = 'https://api.sketchfab.com/v3';
-const SKETCHFAB_API_TOKEN = import.meta.env.VITE_SKETCHFAB_API_TOKEN;
-
-export async function searchSketchfab(query: string): Promise<Asset[]> {
-    if (!SKETCHFAB_API_TOKEN) {
-        console.warn('Sketchfab API token not set. Falling back to sample assets.');
-        return fetch('/server/sample-assets.json').then(res => res.json());
-    }
-
-    const response = await fetch(`${SKETCHFAB_API_URL}/search?type=models&q=${query}&downloadable=true`, {
-        headers: {
-            Authorization: `Token ${SKETCHFAB_API_TOKEN}`,
-        },
-    });
-
-    if (!response.ok) {
-        console.error('Sketchfab API error:', response.status, response.statusText);
-        return fetch('/server/sample-assets.json').then(res => res.json());
-    }
-
-    const data = await response.json();
-
-    return data.results.map((model: any) => ({
-        id: model.uid,
-        name: model.name,
-        description: model.description,
-        source: 'sketchfab',
-        url: model.viewerUrl,
-        thumbnailUrl: model.thumbnails.images[0].url,
-        tags: model.tags.map((tag: any) => tag.name),
-    }));
-}
-
-export async function getSketchfabModelDownloadUrl(uid: string): Promise<{ url: string; size: number } | null> {
-    if (!SKETCHFAB_API_TOKEN) {
-        console.error('Sketchfab API token not set.');
-        return null;
-    }
-
-    // Use 'Bearer' as per the new documentation
-    const response = await fetch(`${SKETCHFAB_API_URL}/models/${uid}/download`, {
-        headers: {
-            Authorization: `Bearer ${SKETCHFAB_API_TOKEN}`,
-        },
-        mode: 'cors'
-    });
-
-    if (!response.ok) {
-        console.error('Failed to get Sketchfab model download URL:', response.status, response.statusText);
-        // Log the response body for more details if available
-        try {
-            const errorBody = await response.json();
-            console.error('Error details:', errorBody);
-        } catch (e) {
-            // response body might not be json
-        }
-        return null;
-    }
-
-    const data = await response.json();
-    
-    // The new docs show the response is an object with gltf, usdz, etc.
-    // We want the gltf object which contains the url and size.
-    if (data.gltf) {
-        return data.gltf;
-    } else {
-        console.error('No glTF download available for this model.');
-        return null;
-    }
-}
+// Sketchfab related functions have been moved to src/sketchfab.ts
 
 
 export async function generateTerrainParameters(prompt: string): Promise<any> {
