@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import { getSketchfabModelDownloadUrl } from './api';
+import { getSketchfabModelDownloadUrl } from './sketchfab';
 import type { TerrainGenerator } from './terrain';
 
 declare const zip: any;
