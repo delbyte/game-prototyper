@@ -16,5 +16,311 @@
     "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF/Duck.gltf",
     "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/screenshot/screenshot.png",
     "tags": ["animal", "bird"]
+  },
+  {
+    "id": "antique-camera",
+    "name": "Antique Camera",
+    "description": "An antique camera model.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/AntiqueCamera/glTF/AntiqueCamera.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/AntiqueCamera/screenshot/screenshot.png",
+    "tags": ["camera", "antique", "prop"]
+  },
+  {
+    "id": "avocado",
+    "name": "Avocado",
+    "description": "A realistic avocado model.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Avocado/glTF/Avocado.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Avocado/screenshot/screenshot.png",
+    "tags": ["food", "fruit"]
+  },
+  {
+    "id": "barramundi-fish",
+    "name": "Barramundi Fish",
+    "description": "A barramundi fish model.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BarramundiFish/glTF/BarramundiFish.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BarramundiFish/screenshot/screenshot.png",
+    "tags": ["animal", "fish"]
+  },
+  {
+    "id": "boom-box",
+    "name": "Boom Box",
+    "description": "A retro boom box model.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoomBox/glTF/BoomBox.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoomBox/screenshot/screenshot.png",
+    "tags": ["electronics", "retro"]
+  },
+  {
+    "id": "corset",
+    "name": "Corset",
+    "description": "A corset model.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Corset/glTF/Corset.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Corset/screenshot/screenshot.png",
+    "tags": ["clothing", "fashion"]
+  },
+  {
+    "id": "damaged-helmet",
+    "name": "Damaged Helmet",
+    "description": "A battle-damaged sci-fi helmet with PBR materials.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/DamagedHelmet/glTF/DamagedHelmet.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/DamagedHelmet/screenshot/screenshot.png",
+    "tags": ["helmet", "sci-fi", "pbr"]
+  },
+  {
+    "id": "flight-helmet",
+    "name": "Flight Helmet",
+    "description": "A flight helmet model.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/FlightHelmet/glTF/FlightHelmet.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/FlightHelmet/screenshot/screenshot.png",
+    "tags": ["helmet", "military"]
+  },
+  {
+    "id": "lantern",
+    "name": "Lantern",
+    "description": "A vintage lantern with emissive materials.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Lantern/glTF/Lantern.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Lantern/screenshot/screenshot.png",
+    "tags": ["light", "vintage"]
+  },
+  {
+    "id": "sci-fi-helmet",
+    "name": "Sci Fi Helmet",
+    "description": "A sci-fi helmet model.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/SciFiHelmet/glTF/SciFiHelmet.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/SciFiHelmet/screenshot/screenshot.png",
+    "tags": ["helmet", "sci-fi"]
+  },
+  {
+    "id": "suzanne",
+    "name": "Suzanne",
+    "description": "The Blender monkey head model.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Suzanne/glTF/Suzanne.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Suzanne/screenshot/screenshot.png",
+    "tags": ["blender", "monkey"]
+  },
+  {
+    "id": "water-bottle",
+    "name": "Water Bottle",
+    "description": "A water bottle model.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/glTF/WaterBottle.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/WaterBottle/screenshot/screenshot.png",
+    "tags": ["prop", "bottle"]
+  },
+  {
+    "id": "box",
+    "name": "Box",
+    "description": "One mesh and one material. Start with this.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Box/glTF/Box.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Box/screenshot/screenshot.png",
+    "tags": ["primitive", "basic"]
+  },
+  {
+    "id": "box-interleaved",
+    "name": "Box Interleaved",
+    "description": "Box example with interleaved position and normal attributes.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxInterleaved/glTF/BoxInterleaved.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxInterleaved/screenshot/screenshot.png",
+    "tags": ["primitive", "test"]
+  },
+  {
+    "id": "box-textured",
+    "name": "Box Textured",
+    "description": "Box with one texture. Start with this to test textures.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxTextured/glTF/BoxTextured.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxTextured/screenshot/screenshot.png",
+    "tags": ["primitive", "texture", "test"]
+  },
+  {
+    "id": "box-textured-npot",
+    "name": "Box Textured NPOT",
+    "description": "Box with a non-power-of-2 (NPOT) texture. Not all implementations support NPOT textures.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxTexturedNPOT/glTF/BoxTexturedNPOT.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxTexturedNPOT/screenshot/screenshot.png",
+    "tags": ["primitive", "texture", "npot", "test"]
+  },
+  {
+    "id": "box-with-spaces",
+    "name": "Box With Spaces",
+    "description": "Box with URI-encoded spaces in the texture names used by a simple PBR material.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxWithSpaces/glTF/BoxWithSpaces.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxWithSpaces/screenshot/screenshot.png",
+    "tags": ["primitive", "pbr", "test"]
+  },
+  {
+    "id": "box-vertex-colors",
+    "name": "Box Vertex Colors",
+    "description": "Box with vertex colors applied.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxVertexColors/glTF/BoxVertexColors.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxVertexColors/screenshot/screenshot.png",
+    "tags": ["primitive", "colors", "test"]
+  },
+  {
+    "id": "cube",
+    "name": "Cube",
+    "description": "A cube with non-smoothed faces.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Cube/glTF/Cube.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Cube/screenshot/screenshot.png",
+    "tags": ["primitive", "basic"]
+  },
+  {
+    "id": "animated-cube",
+    "name": "Animated Cube",
+    "description": "Same as previous cube having a linear rotation animation.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/AnimatedCube/glTF/AnimatedCube.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/AnimatedCube/screenshot/screenshot.png",
+    "tags": ["primitive", "animation"]
+  },
+  {
+    "id": "duck",
+    "name": "Duck",
+    "description": "The COLLADA duck. One texture.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/glTF/Duck.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Duck/screenshot/screenshot.png",
+    "tags": ["animal", "bird", "collada"]
+  },
+  {
+    "id": "2-cylinder-engine",
+    "name": "2 Cylinder Engine",
+    "description": "Small CAD data set, including hierarchy.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/2CylinderEngine/glTF/2CylinderEngine.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/2CylinderEngine/screenshot/screenshot.png",
+    "tags": ["cad", "engine"]
+  },
+  {
+    "id": "reciprocating-saw",
+    "name": "Reciprocating Saw",
+    "description": "Small CAD data set, including hierarchy.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/ReciprocatingSaw/glTF/ReciprocatingSaw.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/ReciprocatingSaw/screenshot/screenshot.png",
+    "tags": ["cad", "tool"]
+  },
+  {
+    "id": "gearbox-assy",
+    "name": "Gearbox Assy",
+    "description": "Medium-sized CAD data set, including hierarchy.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/GearboxAssy/glTF/GearboxAssy.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/GearboxAssy/screenshot/screenshot.png",
+    "tags": ["cad", "machine"]
+  },
+  {
+    "id": "buggy",
+    "name": "Buggy",
+    "description": "Medium-sized CAD data set, including hierarchy.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Buggy/glTF/Buggy.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Buggy/screenshot/screenshot.png",
+    "tags": ["cad", "vehicle"]
+  },
+  {
+    "id": "box-animated",
+    "name": "Box Animated",
+    "description": "Rotation and Translation Animations. Start with this to test animations.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxAnimated/glTF/BoxAnimated.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BoxAnimated/screenshot/screenshot.png",
+    "tags": ["primitive", "animation"]
+  },
+  {
+    "id": "cesium-milk-truck",
+    "name": "Cesium Milk Truck",
+    "description": "Textured. Multiple nodes/meshes. Animations.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMilkTruck/glTF/CesiumMilkTruck.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMilkTruck/screenshot/screenshot.png",
+    "tags": ["vehicle", "animation"]
+  },
+  {
+    "id": "rigged-simple",
+    "name": "Rigged Simple",
+    "description": "Animations. Skins. Start with this to test skinning.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/RiggedSimple/glTF/RiggedSimple.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/RiggedSimple/screenshot/screenshot.png",
+    "tags": ["rigged", "animation", "skinning"]
+  },
+  {
+    "id": "rigged-figure",
+    "name": "Rigged Figure",
+    "description": "Animations. Skins.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/RiggedFigure/glTF/RiggedFigure.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/RiggedFigure/screenshot/screenshot.png",
+    "tags": ["rigged", "animation", "skinning"]
+  },
+  {
+    "id": "cesium-man",
+    "name": "Cesium Man",
+    "description": "Textured. Animations. Skins.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMan/glTF/CesiumMan.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/CesiumMan/screenshot/screenshot.png",
+    "tags": ["character", "animation", "skinning"]
+  },
+  {
+    "id": "brain-stem",
+    "name": "BrainStem",
+    "description": "Animations. Skins.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BrainStem/glTF/BrainStem.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/BrainStem/screenshot/screenshot.png",
+    "tags": ["biology", "animation", "skinning"]
+  },
+  {
+    "id": "fox",
+    "name": "Fox",
+    "description": "Multiple animations cycles: Survey, Walk, Run.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Fox/glTF/Fox.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Fox/screenshot/screenshot.jpg",
+    "tags": ["animal", "animation"]
+  },
+  {
+    "id": "virtual-city",
+    "name": "Virtual City",
+    "description": "Textured. Animations.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/VC/glTF/VC.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/VC/screenshot/screenshot.png",
+    "tags": ["city", "building", "animation"]
+  },
+  {
+    "id": "sponza",
+    "name": "Sponza",
+    "description": "Building interior, often used to test lighting.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Sponza/glTF/Sponza.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/Sponza/screenshot/screenshot.png",
+    "tags": ["building", "interior", "lighting", "test"]
+  },
+  {
+    "id": "two-sided-plane",
+    "name": "Two Sided Plane",
+    "description": "A plane having the two sided material parameter enabled.",
+    "source": "samples",
+    "url": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/TwoSidedPlane/glTF/TwoSidedPlane.gltf",
+    "thumbnailUrl": "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Models/master/2.0/TwoSidedPlane/screenshot/screenshot.png",
+    "tags": ["primitive", "material", "test"]
   }
 ]
