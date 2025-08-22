@@ -1,8 +1,9 @@
 import * as THREE from 'three';
 import { AssetManager } from './asset-manager';
 import type { AssetMetadata } from './asset-manager';
-import { searchSketchfab } from './api';
+import { searchSketchfab, redirectToSketchfabLogin, getAccessToken, logout } from './sketchfab';
 import type { Asset } from './types';
+import { state } from './state';
 
 export class AssetBrowserClient {
     private assetManager: AssetManager;
@@ -26,7 +27,50 @@ export class AssetBrowserClient {
         this.container = container;
 
         this.createButton();
+        this.createLoginButton();
         this.setupSelectionListener();
+        window.addEventListener('message', (event) => {
+            if (event.data === 'sketchfab_auth_success') {
+                this.updateLoginButton();
+            }
+        });
+    }
+
+    private createLoginButton() {
+        const btn = document.createElement('button');
+        btn.id = 'sketchfab-login-btn';
+        btn.style.position = 'fixed';
+        btn.style.left = '100px';
+        btn.style.top = '10px';
+        btn.style.zIndex = '1000';
+        btn.style.padding = '8px 12px';
+        btn.style.background = '#1caAD9';
+        btn.style.color = 'white';
+        btn.style.border = 'none';
+        btn.style.borderRadius = '4px';
+        btn.style.cursor = 'pointer';
+        this.container.appendChild(btn);
+        this.updateLoginButton();
+    }
+
+    private updateLoginButton() {
+        const btn = document.getElementById('sketchfab-login-btn') as HTMLButtonElement;
+        if (!btn) return;
+
+        const token = getAccessToken();
+        if (token) {
+            btn.textContent = 'Logout from Sketchfab';
+            btn.onclick = () => {
+                logout();
+                this.updateLoginButton();
+            };
+        } else {
+            btn.textContent = 'Login to Sketchfab';
+            btn.onclick = () => {
+                const loginWindow = window.open('', '_blank', 'width=800,height=600');
+                redirectToSketchfabLogin();
+            };
+        }
     }
 
     private createButton() {
@@ -113,7 +157,27 @@ export class AssetBrowserClient {
         resultsDiv.innerHTML = 'Searching...';
 
         try {
-            const results = await searchSketchfab(query);
+            let results: Asset[] = [];
+
+            if (state.devMode) {
+                // Load from sample-assets.json
+                const response = await fetch('/server/sample-assets.json');
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                results = await response.json();
+                // Filter by query if provided
+                if (query) {
+                    results = results.filter(asset => 
+                        (asset.name && asset.name.toLowerCase().includes(query.toLowerCase())) ||
+                        (asset.description && asset.description.toLowerCase().includes(query.toLowerCase())) ||
+                        (asset.tags && asset.tags.some(tag => tag.toLowerCase().includes(query.toLowerCase())))
+                    );
+                }
+            } else {
+                // Use Sketchfab API
+                results = await searchSketchfab(query);
+            }
 
             resultsDiv.innerHTML = '';
             if (results.length === 0) {
@@ -168,6 +232,14 @@ export class AssetBrowserClient {
     }
 
     private async fetchAndPlace(record: Asset) {
+        if (!state.devMode) {
+            const accessToken = getAccessToken();
+            if (!accessToken) {
+                alert('Please log in to Sketchfab to download models.');
+                redirectToSketchfabLogin();
+                return;
+            }
+        }
         const resultsDiv = this.panel?.querySelector('#asset-browser-results') as HTMLElement;
         if (resultsDiv) resultsDiv.textContent = 'Downloading model...';
 
@@ -178,7 +250,7 @@ export class AssetBrowserClient {
                 id: record.id, // Use the original Sketchfab UID
                 name: record.name || record.id,
                 description: record.description || '',
-                source: 'sketchfab',
+                source: state.devMode ? record.source : 'sketchfab', // Set source based on devMode
                 url: record.url, // The persistent viewer URL
                 thumbnailUrl: record.thumbnailUrl,
                 tags: record.tags || []
@@ -204,7 +276,14 @@ export class AssetBrowserClient {
             window.addEventListener('keydown', onEsc);
         } catch (err) {
             console.error('Fetch & place failed', err);
-            if (resultsDiv) resultsDiv.textContent = 'Failed to download or load model';
+            if (resultsDiv) {
+                if (err instanceof Error && err.message.includes('Sketchfab authentication expired')) {
+                    resultsDiv.textContent = 'Sketchfab login expired. Please log in again.';
+                    redirectToSketchfabLogin(); // Prompt user to log in again
+                } else {
+                    resultsDiv.textContent = 'Failed to download or load model';
+                }
+            }
         }
     }
 
