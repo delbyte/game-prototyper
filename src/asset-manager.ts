@@ -27,6 +27,7 @@ export interface PlacedAsset {
     position: THREE.Vector3;
     rotation: THREE.Euler;
     scale: THREE.Vector3;
+    collisionMeshes?: THREE.Mesh[]; // Store actual mesh objects for precise collision
 }
 
 /**
@@ -37,6 +38,8 @@ export class AssetManager {
     private loader: GLTFLoader;
     private loadedAssets: Map<string, THREE.Object3D> = new Map();
     private placedAssets: Map<string, PlacedAsset> = new Map();
+    public collisionBoxes: THREE.Box3[] = []; // Keep for backward compatibility
+    public collisionMeshes: THREE.Mesh[] = []; // New: Store actual meshes for precise collision
     private scene: THREE.Scene;
     private terrainGenerator?: TerrainGenerator;
 
@@ -138,16 +141,16 @@ export class AssetManager {
         console.log(`Initiating Sketchfab download for: ${metadata.name}`);
 
         // 1. Get the temporary download URL from the API
-        const downloadInfo = await getSketchfabModelDownloadUrl(metadata.id.replace(/_.*$/, '')); // Ensure we use the original UID
-        if (!downloadInfo || !downloadInfo.url) {
+        const downloadUrl = await getSketchfabModelDownloadUrl(metadata.id.replace(/_.*$/, '')); // Ensure we use the original UID
+        if (!downloadUrl) {
             throw new Error(`Could not get download URL for Sketchfab model ${metadata.name}`);
         }
 
-        console.log(`Got download URL, archive size: ${(downloadInfo.size / 1024 / 1024).toFixed(2)} MB`);
+        console.log(`Got download URL, downloading archive...`);
 
         // 2. Unpack the ZIP archive using zip.js
         // @ts-ignore - zip is a global from the script tag
-        const zipReader = new zip.HttpReader(downloadInfo.url);
+        const zipReader = new zip.HttpReader(downloadUrl);
         // @ts-ignore
         const reader = new zip.ZipReader(zipReader);
         const entries = await reader.getEntries();
@@ -328,16 +331,27 @@ export class AssetManager {
         // Position so the model's bottom sits on the requested Y (e.g., terrain height)
         mesh.position.set(position.x, position.y - minY, position.z);
 
-        mesh.name = metadata.name || metadata.id;
+        // Add to scene
+        this.scene.add(mesh);
+
+        // Extract collision meshes - collect all actual mesh objects
+        const collisionMeshes: THREE.Mesh[] = [];
         mesh.traverse((child) => {
             if ((child as THREE.Mesh).isMesh) {
-                (child as THREE.Mesh).castShadow = true;
-                (child as THREE.Mesh).receiveShadow = true;
+                const meshChild = child as THREE.Mesh;
+                meshChild.castShadow = true;
+                meshChild.receiveShadow = true;
+                // Add to collision meshes for precise collision detection
+                collisionMeshes.push(meshChild);
             }
         });
 
-        // Add to scene
-        this.scene.add(mesh);
+        // Create and store the collision box (keep for compatibility)
+        const collisionBox = new THREE.Box3().setFromObject(mesh);
+        this.collisionBoxes.push(collisionBox);
+        
+        // Store collision meshes for precise collision detection
+        this.collisionMeshes.push(...collisionMeshes);
 
         // Create placed asset record
         const placedAsset: PlacedAsset = {
@@ -346,7 +360,8 @@ export class AssetManager {
             mesh,
             position: mesh.position.clone(),
             rotation: rotation.clone(),
-            scale: finalScale.clone()
+            scale: finalScale.clone(),
+            collisionMeshes: collisionMeshes.slice() // Store collision meshes with the asset
         };
 
         this.placedAssets.set(placedAsset.id, placedAsset);
@@ -392,7 +407,25 @@ export class AssetManager {
             placed.position.copy(mesh.position);
         }
 
+        this._rebuildCollisionBoxes();
         return true;
+    }
+
+    private _rebuildCollisionBoxes(): void {
+        this.collisionBoxes = [];
+        this.collisionMeshes = [];
+        
+        for (const asset of this.placedAssets.values()) {
+            // Rebuild bounding box
+            const box = new THREE.Box3().setFromObject(asset.mesh);
+            this.collisionBoxes.push(box);
+            
+            // Rebuild collision meshes
+            if (asset.collisionMeshes) {
+                this.collisionMeshes.push(...asset.collisionMeshes);
+            }
+        }
+        console.log('Rebuilt collision system:', this.collisionBoxes.length, 'boxes,', this.collisionMeshes.length, 'meshes');
     }
 
     /**
@@ -423,6 +456,7 @@ export class AssetManager {
 
         // Remove from tracking
         this.placedAssets.delete(placedAssetId);
+        this._rebuildCollisionBoxes(); // This will also rebuild collision meshes
         
         console.log(`Removed asset: ${placedAsset.metadata.name}`);
         return true;
@@ -478,6 +512,9 @@ export class AssetManager {
             // ignore
         }
 
+        // Always rebuild collision boxes when transforms change
+        this._rebuildCollisionBoxes();
+
         return true;
     }
 
@@ -504,6 +541,8 @@ export class AssetManager {
         }
         
         this.placedAssets.clear();
+        this.collisionBoxes = []; // Clear collision boxes
+        this.collisionMeshes = []; // Clear collision meshes
         console.log('Cleared all placed assets');
     }
 
@@ -524,6 +563,23 @@ export class AssetManager {
         await this.loadAsset(metadata);
         
         return metadata;
+    }
+
+    /**
+     * Get real-time collision meshes (always up-to-date with current transforms)
+     * This method dynamically collects meshes to ensure collision detection
+     * works correctly even when assets are moved, rotated, or scaled
+     */
+    getCollisionMeshes(): THREE.Mesh[] {
+        const meshes: THREE.Mesh[] = [];
+        for (const asset of this.placedAssets.values()) {
+            asset.mesh.traverse((child) => {
+                if ((child as THREE.Mesh).isMesh) {
+                    meshes.push(child as THREE.Mesh);
+                }
+            });
+        }
+        return meshes;
     }
 
     /**
