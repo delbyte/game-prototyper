@@ -27,4 +27,4 @@ setupControls(renderer.domElement);
 setupUI(terrainGenerator, scene);
 
 // Start the animation loop and provide the TerrainGenerator instance
-startAnimationLoop(terrainGenerator);
+startAnimationLoop(terrainGenerator, assetManager);
