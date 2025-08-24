@@ -4,108 +4,69 @@ import type { Asset } from "./types";
 const API_KEY = import.meta.env.VITE_GEMINI_API_KEY;
 const genAI = new GoogleGenerativeAI(API_KEY);
 
-// Sketchfab related functions have been moved to src/sketchfab.ts
-
-
 export async function generateTerrainParameters(prompt: string): Promise<any> {
     try {
-        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash"});
+        const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
         const fullPrompt = `
-        You are a deterministic world-building engine for a real-time Three.js terrain generator. Produce ONLY valid JSON (no explanation, no commentary) that the client will ingest directly. Maintain the exact structure shown in the reference example below. If any field is optional for a particular design, still include it with a safe default.
+        You are a deterministic world-building engine for a real-time Three.js terrain generator. Produce ONLY valid JSON (no explanation, no commentary) that the client will ingest directly. Maintain the exact structure shown in the reference example below.
 
         IMPORTANT: Follow these rules strictly:
-        - Output MUST be parsable JSON and match the structure used by the app (global, skybox, lighting, biomes).
+        - Output MUST be parsable JSON and match the structure: { global, skybox, lighting, terrain, environment, biomes }.
         - Do not include human-readable commentary, markdown fences, or extra keys.
-        - Respect the numeric ranges and types specified in the VALUE RANGES section.
-        - When the user's prompt includes a shorthand description OR it is implied that the terrain is of a certain type(e.g., "superflat", "huge peaks", "rolling hills", "islands", "canyons", "terraced", "savannah"), translate it into precise parameter adjustments using the mapping rules below.
-        - Prefer predictable, repeatable parameter choices. If a seed is helpful, include "seed": <integer> in global (optional), but it's not required.
+        - The 'biomes' array should be ordered from most specific to most general. The last biome should be a general fallback.
 
-        HOW THE PARAMETERS MAP TO STYLES (deterministic rule mappings):
-        - "superflat" / "flat": set noiseScale -> maximum (0.025), octaves -> absolute minimum (3), heightMultiplier -> extremely low (0.001-0.01), baseHeight -> tiny constant (0.001-0.01), persistence -> very low (0.3). Result: nearly perfectly flat terrain with microscopic variations only.
-        - "gentle rolling" / "rolling hills": noiseScale -> mid-high, octaves -> 3-5, heightMultiplier -> low (0.1-0.4), baseHeight moderate. Soft transitions and long wavelengths.
-        - "huge peaks" / "jagged mountains": noiseScale -> low (small values for large features), octaves -> high (6-8), persistence -> higher (0.5-0.7), lacunarity -> 2.0-2.8, heightMultiplier -> toward upper range to produce tall relief.
-        - "plateau" / "mesa": combine a large low-frequency base (noiseScale low) plus a second octave with high persistence and clamp plateau tops via baseHeight near upper percent of maxHeight.
-        - "islands" / "archipelago": bias baseHeight so sea-level sits at low values; use biome masks (biomeScale small) to place land patches; use higher noiseScale for isolated peaks per island.
-        - "canyons" / "ravines": use anisotropic noise by setting noiseScale X/Z differences (prefer lower-level detail in one axis) and add negative baseHeight offset plus deeper heightMultiplier locally in a biome.
-        - "terraced" / "farmland": use low-frequency base with quantized height steps (simulate by recommending small heightMultiplier but larger baseHeight steps; client can quantize during generation).
-        - "floating" / "floating islands": put biome with high baseHeight and small local islands (biomeScale small), increase atmosphere/zenith contrast and set gravity-agnostic visuals; (note: client must treat islands as separate meshes).
+        HOW THE PARAMETERS MAP TO STYLES:
+        - Terrain Shape: Controlled by the 'terrain' object. Use the 'base', 'mountains', and 'details' layers to shape the world. Prompts like "rolling hills" or "jagged mountains" should primarily affect the amplitude and scale of these layers.
+        - Terrain Color & Biomes: Controlled by the 'biomes' array. Each biome is defined by a set of rules based on normalized elevation, temperature, and moisture (all 0.0-1.0). The color is defined by a gradient (colorRamp).
+        - "Snow-capped peaks": Create a biome with a high 'minElevation' rule (e.g., 0.8) and a colorRamp that goes from gray to white.
+        - "Pink mountains": Create a mountain-shaped terrain, then define a biome with rules that match the mountain elevations and a colorRamp that uses shades of pink.
+        - "Alien world with wavy surfaces": Use low-frequency, low-amplitude noise for the terrain shape. Then, define a set of biomes with unconventional colorRamps (purples, greens, etc.).
 
-        TECHNICAL CONSTRAINTS & PERFORMANCE (must keep these):
-        - segments: triangle density (400-1500). Reduce segments for larger worlds. Default ~1000 for good detail.
-        - octaves: 3-8. Use more octaves only when the style needs finer detail (mountains). More octaves cost more CPU.
-        - noiseScale: 0.005-0.025. Smaller values => larger features (mountains, wide valleys). Larger values => fine detail.
-        - biomeScale: 0.003-0.008. Smaller => larger regions; larger => more frequent biome changes.
-        - heightMultiplier: 0.3-1.8 (use smaller values for flat/rolling; higher values for dramatic peaks).
-        - All colors: 0.0-1.0 (if values are outside this, assume user mistakenly gave 0-255; convert by dividing by 255).
-        - Keep lighting intensities 0.2-0.8 and atmosphereStrength 0.01-0.15 for rendering reliability.
-
-        EXTRA GUIDELINES FOR ROBUSTNESS:
-        - If the user requests a named real-world style ("Alpine", "Sahara", "Amazon"), favor realistic parameter mixes (e.g., Alpine -> high heightMultiplier, low noiseScale; Sahara -> very low heightMultiplier, sandy colors, higher baseHeight for dunes).
-        - If the user asks for a hybrid (e.g., "volcanic islands with snow caps"), produce multiple biomes: volcanic base + snow-capped peaks with height-based palette steps and a blending band.
-  - Provide an explicit dominant "mood" tag: include top-level string field "mood" with values like "bright", "moody", "sunset", "alien", or "neutral" to help UI choices.
-  - Provide an explicit dominant biome signal: include top-level fields "dominantBiome" and "dominantCoverage". "dominantBiome" may be the name of the biome (string) or the zero-based index into the "biomes" array (integer). "dominantCoverage" must be a decimal between 0.5 and 0.95 indicating the fraction of the map covered by the dominant biome. When the user says "mostly stone mountains" or similar, set the dominant biome to the appropriate biome and choose dominantCoverage between 0.7-0.95 depending on wording ("mostly" -> 0.7-0.85, "almost entirely" -> 0.85-0.95). The generator must still include the full "biomes" array describing the other, smaller biomes.
-  - Provide elevation color bands to enable Y-level overrides (ice caps, glaciers, lava flows). Optionally include a top-level array field "elevationColorBands": an ordered list of objects { "min": <0-1>, "max": <0-1>, "color": {r,g,b} } where min/max are normalized heights (0 = lowest, 1 = highest) and color uses 0-1 RGB values. Use these bands to indicate zones that should override/blend with biome colors (e.g., ice cap: min=0.85, max=1.0, color={r:0.95,g:0.95,b:1.0}). Ensure bands do not overlap excessively and are within [0,1].
-        - When requested "superflat" or "flat runways" ensure segments remain sufficient to cover area but use minimal vertical variance; do not produce large noise amplitudes.
+        TECHNICAL CONSTRAINTS & PERFORMANCE:
+        - segments: 400-1500.
+        - octaves: 3-8.
+        - scale: 0.001-0.2.
+        - amplitude: 0.0-1.5.
+        - All colors are 0.0-1.0 RGB.
+        - Biome rules (min/max Elevation/Temperature/Moisture) are normalized from 0.0 to 1.0.
+        - ColorRamp stops are normalized from 0.0 to 1.0 within a biome's elevation range.
 
         OUTPUT REQUIREMENTS:
-        - Return JSON only. Keep keys: global, skybox, lighting, biomes. You may add an optional top-level "seed" and "mood".
-  - Optionally include top-level: "dominantBiome" (string or integer) and "dominantCoverage" (0.5-0.95) to indicate which biome should cover most of the map and by how much.
-  - Optionally include top-level: "elevationColorBands" as described above so the client can apply Y-level color overrides (bands normalized 0..1 with RGB colors 0..1).
-        - For each biome include: name, noiseScale, octaves, persistence, lacunarity, heightMultiplier, baseHeight, colors { low, mid, high }.
-        - Make numeric choices conservative but faithful to the user's intent. Avoid extreme values unless the user explicitly asked for them.
+        - Return JSON only.
+        - The 'terrain' object must contain 'base', 'mountains', and 'details' layers.
+        - The 'environment' object must contain 'temperature' and 'moisture' maps.
+        - The 'biomes' array must contain biome definition objects, each with 'name', 'rules', and 'colorRamp'.
 
-        REFERENCE EXAMPLE (preserve structure and types; use similar ranges):
-  {
-          "global": {
-            "width": 2000,
-            "depth": 2000,
-            "maxHeight": 150,
-            "segments": 1000,
-            "biomeScale": 0.005
-          },
-          "skybox": {
-            "horizonColor": { "r": 0.0, "g": 0.0, "b": 0.0 },
-            "zenithColor": { "r": 0.0, "g": 0.0, "b": 0.2 },
-            "atmosphereColor": { "r": 0.5, "g": 0.5, "b": 0.7 },
-            "atmosphereStrength": 0.05
-          },
-          "lighting": {
-            "ambient": {
-              "color": { "r": 0.1, "g": 0.1, "b": 0.2 },
-              "intensity": 0.3
+        REFERENCE EXAMPLE (preserve structure and types):
+        {
+            "global": { "width": 2000, "depth": 2000, "maxHeight": 250, "segments": 1000, "offset": -20 },
+            "skybox": { "horizonColor": { "r": 0.5, "g": 0.5, "b": 0.7 }, "zenithColor": { "r": 0.1, "g": 0.2, "b": 0.4 }, "atmosphereColor": { "r": 0.8, "g": 0.85, "b": 0.9 }, "atmosphereStrength": 0.1 },
+            "lighting": { "ambient": { "color": { "r": 0.6, "g": 0.7, "b": 0.8 }, "intensity": 0.5 }, "directional": { "color": { "r": 1.0, "g": 0.9, "b": 0.8 }, "intensity": 1.0, "position": { "x": 100, "y": 100, "z": 50 } } },
+            "terrain": {
+                "base": { "seed": 555, "scale": 0.004, "octaves": 8, "persistence": 0.5, "lacunarity": 2.0, "amplitude": 1.0 },
+                "mountains": { "seed": 666, "scale": 0.015, "octaves": 6, "persistence": 0.45, "lacunarity": 2.2, "amplitude": 1.2 },
+                "details": { "seed": 777, "scale": 0.08, "octaves": 4, "persistence": 0.3, "lacunarity": 2.5, "amplitude": 0.1 }
             },
-            "directional": {
-              "color": { "r": 0.5, "g": 0.5, "b": 0.7 },
-              "intensity": 0.5,
-              "position": { "x": 0, "y": 100, "z": 0 }
-            }
-          },
-          "biomes": [
-            {
-              "name": "Volcanic Wastes",
-              "noiseScale": 0.01,
-              "octaves": 6,
-              "persistence": 0.5,
-              "lacunarity": 2.2,
-              "heightMultiplier": 0.8,
-              "baseHeight": 0.2,
-              "colors": {
-                "low": { "r": 0.1, "g": 0.1, "b": 0.1 },
-                "mid": { "r": 0.3, "g": 0.2, "b": 0.2 },
-                "high": { "r": 0.8, "g": 0.3, "b": 0.1 }
-              }
-            }
-          ]
-  }
+            "environment": {
+                "temperature": { "seed": 888, "scale": 0.01, "octaves": 4 },
+                "moisture": { "seed": 999, "scale": 0.01, "octaves": 4 }
+            },
+            "biomes": [
+                { "name": "Deep Water", "rules": { "maxElevation": 0.08 }, "colorRamp": [ { "stop": 0, "color": { "r": 0, "g": 0.05, "b": 0.2 } }, { "stop": 1, "color": { "r": 0.05, "g": 0.1, "b": 0.4 } } ] },
+                { "name": "Sand", "rules": { "minElevation": 0.08, "maxElevation": 0.12 }, "colorRamp": [ { "stop": 0, "color": { "r": 0.8, "g": 0.7, "b": 0.4 } }, { "stop": 1, "color": { "r": 0.85, "g": 0.75, "b": 0.5 } } ] },
+                { "name": "Plains", "rules": { "minElevation": 0.12, "maxElevation": 0.4 }, "colorRamp": [ { "stop": 0, "color": { "r": 0.2, "g": 0.6, "b": 0.1 } }, { "stop": 0.5, "color": { "r": 0.3, "g": 0.7, "b": 0.2 } }, { "stop": 1, "color": { "r": 0.4, "g": 0.5, "b": 0.3 } } ] },
+                { "name": "Rock", "rules": { "minElevation": 0.4, "maxElevation": 0.8 }, "colorRamp": [ { "stop": 0, "color": { "r": 0.4, "g": 0.4, "b": 0.4 } }, { "stop": 1, "color": { "r": 0.5, "g": 0.5, "b": 0.5 } } ] },
+                { "name": "Snow", "rules": { "minElevation": 0.8 }, "colorRamp": [ { "stop": 0, "color": { "r": 0.8, "g": 0.8, "b": 0.85 } }, { "stop": 1, "color": { "r": 0.95, "g": 0.95, "b": 1.0 } } ] }
+            ]
+        }
 
-  Now generate parameters tailored to this user request (as JSON only): ${JSON.stringify(prompt)}
+        Now generate parameters tailored to this user request (as JSON only): ${JSON.stringify(prompt)}
     `;
 
         const result = await model.generateContent(fullPrompt);
         const response = await result.response;
         
-        // Handle the new Gemini response structure
         let text: string;
         if (response.candidates && response.candidates[0]?.content?.parts?.[0]?.text) {
             text = response.candidates[0].content.parts[0].text;
@@ -113,11 +74,9 @@ export async function generateTerrainParameters(prompt: string): Promise<any> {
             text = await response.text();
         }
 
-        // Remove the markdown ```json and ``` from the response
         const jsonText = text.replace(/```json\n?/g, "").replace(/\n?```/g, "").trim();
         const parsedData = JSON.parse(jsonText);
         
-        // Validate and clamp all values to safe ranges
         return validateAndClampParameters(parsedData);
     } catch (error) {
         console.error('Error generating terrain parameters:', error);
@@ -126,125 +85,81 @@ export async function generateTerrainParameters(prompt: string): Promise<any> {
 }
 
 function validateAndClampParameters(params: any): any {
-  // Ensure params and nested objects exist
-  params = params || {};
-  params.global = params.global || {};
-  params.skybox = params.skybox || {};
-  params.lighting = params.lighting || { ambient: {}, directional: {} };
-  params.lighting.ambient = params.lighting.ambient || {};
-  params.lighting.directional = params.lighting.directional || { position: {} };
-  params.biomes = Array.isArray(params.biomes) && params.biomes.length ? params.biomes : [
-    {
-      name: 'Default',
-      noiseScale: 0.015,
-      octaves: 4,
-      persistence: 0.5,
-      lacunarity: 2.0,
-      heightMultiplier: 0.8,
-      baseHeight: 0.1,
-      colors: {
-        low: { r: 0.1, g: 0.2, b: 0.1 },
-        mid: { r: 0.3, g: 0.4, b: 0.3 },
-        high: { r: 0.7, g: 0.7, b: 0.6 }
-      }
-    }
-  ];
+    params = params || {};
+    params.global = params.global || {};
+    params.skybox = params.skybox || {};
+    params.lighting = params.lighting || { ambient: {}, directional: {} };
+    params.lighting.ambient = params.lighting.ambient || {};
+    params.lighting.directional = params.lighting.directional || { position: {} };
+    params.terrain = params.terrain || {};
+    params.terrain.base = params.terrain.base || {};
+    params.terrain.mountains = params.terrain.mountains || {};
+    params.terrain.details = params.terrain.details || {};
+    params.environment = params.environment || {};
+    params.environment.temperature = params.environment.temperature || {};
+    params.environment.moisture = params.environment.moisture || {};
+    params.biomes = params.biomes || [];
 
-  // Clamp global values to safe ranges (match the prompt ranges)
-  params.global.width = Math.min(Math.max(params.global.width || 2000, 1000), 2500);
-  params.global.depth = Math.min(Math.max(params.global.depth || 2000, 1000), 2500);
-  params.global.maxHeight = Math.min(Math.max(params.global.maxHeight || 100, 50), 150);
-  // segments: triangle density (400-1500). Default ~1000.
-  params.global.segments = Math.min(Math.max(params.global.segments || 1000, 400), 1500);
-  // biomeScale: 0.003-0.008 per prompt guidance
-  params.global.biomeScale = Math.min(Math.max(params.global.biomeScale || 0.005, 0.003), 0.008);
+    params.global.width = Math.min(Math.max(params.global.width || 2000, 1000), 2500);
+    params.global.depth = Math.min(Math.max(params.global.depth || 2000, 1000), 2500);
+    params.global.maxHeight = Math.min(Math.max(params.global.maxHeight || 150, 50), 300);
+    params.global.segments = Math.min(Math.max(params.global.segments || 1000, 400), 1500);
+    params.global.offset = params.global.offset || 0;
 
-  // Clamp color values and handle both 0-1 and 0-255 ranges, with safe fallback
-  const clampColor = (color: any, fallback = { r: 0.5, g: 0.5, b: 0.5 }) => {
-    if (!color) color = fallback;
-    let r = typeof color.r === 'number' ? color.r : fallback.r;
-    let g = typeof color.g === 'number' ? color.g : fallback.g;
-    let b = typeof color.b === 'number' ? color.b : fallback.b;
+    const clampColor = (color: any, fallback = { r: 0.5, g: 0.5, b: 0.5 }) => {
+        if (!color) color = fallback;
+        let r = typeof color.r === 'number' ? color.r : fallback.r;
+        let g = typeof color.g === 'number' ? color.g : fallback.g;
+        let b = typeof color.b === 'number' ? color.b : fallback.b;
 
-    // If values are > 1, assume they're in 0-255 range and convert
-    if (r > 1 || g > 1 || b > 1) {
-      r = r / 255;
-      g = g / 255;
-      b = b / 255;
-    }
-
-    return {
-      r: Math.min(Math.max(r, 0), 1),
-      g: Math.min(Math.max(g, 0), 1),
-      b: Math.min(Math.max(b, 0), 1)
+        if (r > 1 || g > 1 || b > 1) {
+            r /= 255; g /= 255; b /= 255;
+        }
+        return { r: Math.min(Math.max(r, 0), 1), g: Math.min(Math.max(g, 0), 1), b: Math.min(Math.max(b, 0), 1) };
     };
-  };
 
-  // Clamp skybox colors
-  params.skybox.horizonColor = clampColor(params.skybox.horizonColor, { r: 0.6, g: 0.8, b: 1.0 });
-  params.skybox.zenithColor = clampColor(params.skybox.zenithColor, { r: 0.0, g: 0.1, b: 0.35 });
-  params.skybox.atmosphereColor = clampColor(params.skybox.atmosphereColor, { r: 0.5, g: 0.5, b: 0.7 });
-  params.skybox.atmosphereStrength = Math.min(Math.max(params.skybox.atmosphereStrength || 0.05, 0), 0.2);
+    params.skybox.horizonColor = clampColor(params.skybox.horizonColor, { r: 0.6, g: 0.8, b: 1.0 });
+    params.skybox.zenithColor = clampColor(params.skybox.zenithColor, { r: 0.0, g: 0.1, b: 0.35 });
+    params.skybox.atmosphereColor = clampColor(params.skybox.atmosphereColor, { r: 0.5, g: 0.5, b: 0.7 });
+    params.skybox.atmosphereStrength = Math.min(Math.max(params.skybox.atmosphereStrength || 0.05, 0), 0.2);
 
-  // Clamp lighting values (keep within safe intensity ranges)
-  params.lighting.ambient.color = clampColor(params.lighting.ambient.color, { r: 0.1, g: 0.1, b: 0.2 });
-  params.lighting.ambient.intensity = Math.min(Math.max(params.lighting.ambient.intensity || 0.3, 0.2), 0.8);
-  params.lighting.directional.color = clampColor(params.lighting.directional.color, { r: 0.8, g: 0.8, b: 0.8 });
-  params.lighting.directional.intensity = Math.min(Math.max(params.lighting.directional.intensity || 0.5, 0.2), 0.8);
+    params.lighting.ambient.color = clampColor(params.lighting.ambient.color, { r: 0.1, g: 0.1, b: 0.2 });
+    params.lighting.ambient.intensity = Math.min(Math.max(params.lighting.ambient.intensity || 0.3, 0.2), 0.8);
+    params.lighting.directional.color = clampColor(params.lighting.directional.color, { r: 0.8, g: 0.8, b: 0.8 });
+    params.lighting.directional.intensity = Math.min(Math.max(params.lighting.directional.intensity || 0.5, 0.2), 0.8);
 
-  // Ensure directional light position is reasonable
-  params.lighting.directional.position.x = Math.min(Math.max(params.lighting.directional.position.x || 100, -150), 150);
-  params.lighting.directional.position.y = Math.min(Math.max(params.lighting.directional.position.y || 100, 50), 150);
-  params.lighting.directional.position.z = Math.min(Math.max(params.lighting.directional.position.z || 50, -150), 150);
+    const clampNoiseLayer = (layer: any) => {
+        layer = layer || {};
+        layer.seed = layer.seed || Math.floor(Math.random() * 65536);
+        layer.scale = Math.min(Math.max(layer.scale || 0.01, 0.001), 0.2);
+        layer.octaves = Math.min(Math.max(Math.round(layer.octaves || 4), 3), 8);
+        layer.persistence = Math.min(Math.max(layer.persistence || 0.5, 0.3), 0.7);
+        layer.lacunarity = Math.min(Math.max(layer.lacunarity || 2.0, 1.8), 3.0);
+        layer.amplitude = Math.min(Math.max(layer.amplitude || 1.0, 0.0), 1.5);
+        return layer;
+    };
 
-  // Clamp biome values (use ranges from the prompt: noiseScale 0.005-0.025, octaves 3-8, persistence 0.3-0.7, lacunarity 1.8-2.8, heightMultiplier 0.3-1.8)
-  params.biomes.forEach((biome: any) => {
-    biome.noiseScale = Math.min(Math.max(biome.noiseScale || 0.015, 0.005), 0.025);
-    biome.octaves = Math.min(Math.max(Math.round(biome.octaves || 4), 3), 8);
-    biome.persistence = Math.min(Math.max(typeof biome.persistence === 'number' ? biome.persistence : 0.5, 0.3), 0.7);
-    biome.lacunarity = Math.min(Math.max(typeof biome.lacunarity === 'number' ? biome.lacunarity : 2.0, 1.8), 2.8);
-    biome.heightMultiplier = Math.min(Math.max(typeof biome.heightMultiplier === 'number' ? biome.heightMultiplier : 0.8, 0.3), 1.8);
-    biome.baseHeight = Math.min(Math.max(typeof biome.baseHeight === 'number' ? biome.baseHeight : 0.1, 0.0), 0.4);
+    params.terrain.base = clampNoiseLayer(params.terrain.base);
+    params.terrain.mountains = clampNoiseLayer(params.terrain.mountains);
+    params.terrain.details = clampNoiseLayer(params.terrain.details);
 
-    biome.colors = biome.colors || {};
-    biome.colors.low = clampColor(biome.colors.low, { r: 0.1, g: 0.1, b: 0.1 });
-    biome.colors.mid = clampColor(biome.colors.mid, { r: 0.3, g: 0.3, b: 0.25 });
-    biome.colors.high = clampColor(biome.colors.high, { r: 0.8, g: 0.8, b: 0.7 });
-  });
+    params.environment.temperature = clampNoiseLayer(params.environment.temperature);
+    params.environment.moisture = clampNoiseLayer(params.environment.moisture);
 
-  // Validate dominantBiome / dominantCoverage if present, or provide defaults
-  if (params.dominantCoverage == null) {
-    // default to majority coverage but not complete takeover
-    params.dominantCoverage = 0.6;
-  }
-  // clamp to allowed 0.5 - 0.95
-  params.dominantCoverage = Math.min(Math.max(params.dominantCoverage, 0.5), 0.95);
-
-  if (params.dominantBiome == null) {
-    // default to first biome
-    params.dominantBiome = 0;
-  } else {
-    // if numeric, ensure it's a valid index into biomes; if string, leave as-is
-    if (typeof params.dominantBiome === 'number') {
-      const idx = Math.round(params.dominantBiome);
-      params.dominantBiome = Math.min(Math.max(idx, 0), params.biomes.length - 1);
+    if (params.biomes.length === 0) {
+        // Add a default biome if none are provided
+        params.biomes.push({ name: 'Default', rules: {}, colorRamp: [{ stop: 0, color: { r: 1, g: 0, b: 1 } }] });
     }
-  }
 
-  // Normalize elevationColorBands if provided
-  if (!Array.isArray(params.elevationColorBands)) {
-    params.elevationColorBands = [];
-  } else {
-    params.elevationColorBands = params.elevationColorBands.map((band: any) => {
-      const min = Math.min(Math.max(typeof band.min === 'number' ? band.min : 0, 0), 1);
-      const max = Math.min(Math.max(typeof band.max === 'number' ? band.max : 1, 0), 1);
-      const correctedMin = Math.min(min, max);
-      const correctedMax = Math.max(min, max);
-      const color = clampColor(band.color, { r: 1, g: 1, b: 1 });
-      return { min: correctedMin, max: correctedMax, color };
-    }).filter((b: any) => b.max > b.min);
-  }
+    params.biomes.forEach((biome: any) => {
+        biome.rules = biome.rules || {};
+        biome.colorRamp = biome.colorRamp || [{ stop: 0, color: { r: 1, g: 0, b: 1 } }];
+        biome.colorRamp.forEach((stop: any) => {
+            stop.color = clampColor(stop.color);
+            stop.stop = Math.min(Math.max(stop.stop || 0, 0), 1);
+        });
+    });
 
-  console.log('Validated terrain parameters:', params);
-  return params;
+    console.log('Validated terrain parameters:', params);
+    return params;
 }
