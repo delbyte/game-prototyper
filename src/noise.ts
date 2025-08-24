@@ -109,8 +109,18 @@ export class PerlinNoise {
         );
     }
 
-    // Fractal noise with multiple octaves
-    fractalNoise(x: number, y: number, octaves: number = 4, persistence: number = 0.5, scale: number = 0.01) {
+    // Fractal Brownian Motion (fBm)
+    fBm(x: number, y: number, {
+        scale = 0.01,
+        octaves = 4,
+        persistence = 0.5,
+        lacunarity = 2.0
+    }: {
+        scale?: number,
+        octaves?: number,
+        persistence?: number,
+        lacunarity?: number
+    } = {}) {
         let value = 0;
         let amplitude = 1;
         let frequency = scale;
@@ -120,7 +130,7 @@ export class PerlinNoise {
             value += this.noise(x * frequency, y * frequency) * amplitude;
             maxValue += amplitude;
             amplitude *= persistence;
-            frequency *= 2;
+            frequency *= lacunarity;
         }
 
         return value / maxValue;
