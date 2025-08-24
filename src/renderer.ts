@@ -5,6 +5,8 @@ import { camera } from './camera';
 import { updateMovement } from './player';
 import { TerrainGenerator } from './terrain';
 
+import { AssetManager } from './asset-manager';
+
 let renderer: THREE.WebGLRenderer;
 let scene: THREE.Scene;
 let skybox: THREE.Mesh;
@@ -132,10 +134,10 @@ function onWindowResize() {
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-export function startAnimationLoop(terrainGenerator: TerrainGenerator) {
-    requestAnimationFrame(() => startAnimationLoop(terrainGenerator));
+export function startAnimationLoop(terrainGenerator: TerrainGenerator, assetManager: AssetManager) {
+    requestAnimationFrame(() => startAnimationLoop(terrainGenerator, assetManager));
 
-    updateMovement(terrainGenerator);
+    updateMovement(terrainGenerator, assetManager);
 
     camera.position.copy(state.cameraPosition);
     camera.rotation.set(0, 0, 0);
