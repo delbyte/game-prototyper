@@ -87,7 +87,7 @@ export function setupUI(terrainGenerator: TerrainGenerator, scene: THREE.Scene) 
 }
 
 
-function setControlMode(mode: string, terrainGenerator: TerrainGenerator) {
+function setControlMode(mode: 'camera' | 'player', terrainGenerator: TerrainGenerator) {
     state.controlMode = mode;
     if (mode === 'player') {
         // Reset velocity when switching to player mode
