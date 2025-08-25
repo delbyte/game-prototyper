@@ -1,135 +1,163 @@
 import * as THREE from 'three';
 import { PerlinNoise } from './noise';
+import type { BiomeProfile, NoiseParams, FullTerrainParameters } from './types';
 
-interface BiomeColor {
-    r: number;
-    g: number;
-    b: number;
-}
-
-interface Biome {
-    name: string;
-    noiseScale: number;
-    octaves: number;
-    persistence: number;
-    lacunarity: number;
-    heightMultiplier: number;
-    baseHeight: number;
-    colors: {
-        low: BiomeColor;
-        mid: BiomeColor;
-        high: BiomeColor;
-    };
+// Helper function for linear interpolation
+function lerp(a: number, b: number, alpha: number): number {
+    return a * (1 - alpha) + b * alpha;
 }
 
 export class TerrainGenerator {
     noise: PerlinNoise;
-    temperatureNoise: PerlinNoise;
-    moistureNoise: PerlinNoise;
+    biomeControlNoise: PerlinNoise;
 
     width: number;
     depth: number;
     maxHeight: number;
     segments: number;
     
-    terrainParams: any;
-    biomes: any[];
+    terrainParams: FullTerrainParameters;
+    biomes: BiomeProfile[];
 
     mesh: THREE.Mesh | null;
     heightMap: number[][];
 
-    constructor(params: any = null) {
-        this.noise = new PerlinNoise(params?.terrain?.base?.seed);
-        this.temperatureNoise = new PerlinNoise(params?.environment?.temperature?.seed);
-        this.moistureNoise = new PerlinNoise(params?.environment?.moisture?.seed);
+    constructor(params: FullTerrainParameters) {
+        this.terrainParams = params;
+        this.noise = new PerlinNoise(); // General purpose noise
+        this.biomeControlNoise = new PerlinNoise(this.terrainParams.biomeControl.seed);
 
-        this.width = params?.global?.width || 2000;
-        this.depth = params?.global?.depth || 2000;
-        this.maxHeight = params?.global?.maxHeight || 150;
-        this.segments = params?.global?.segments || 1000;
+        this.width = this.terrainParams.global.width;
+        this.depth = this.terrainParams.global.depth;
+        this.maxHeight = this.terrainParams.global.maxHeight;
+        this.segments = this.terrainParams.global.segments;
         
-        this.terrainParams = params?.terrain;
-        this.biomes = params?.biomes || [];
+        this.biomes = this.terrainParams.biomes;
+        // Sort biomes by control range to ensure correct lookups
+        this.biomes.sort((a, b) => a.controlRange[0] - b.controlRange[0]);
 
         this.mesh = null;
         this.heightMap = [];
     }
 
-    private calculateElevation(worldX: number, worldZ: number): number {
-        const { base, mountains, details } = this.terrainParams;
+    private getBiomeInfo(worldX: number, worldZ: number): { primaryBiome: BiomeProfile, blendedParams: NoiseParams } {
+        const controlNoise_params = this.terrainParams.biomeControl;
+        const controlValue = this.biomeControlNoise.fBm(worldX, worldZ, controlNoise_params);
 
-        const base_elevation = this.noise.fBm(worldX, worldZ, base) * base.amplitude;
-        const mountain_ranges = this.noise.fBm(worldX, worldZ, mountains) * mountains.amplitude;
-        const local_details = this.noise.fBm(worldX, worldZ, details) * details.amplitude;
+        let primaryBiome: BiomeProfile = this.biomes[this.biomes.length - 1];
+        let nextBiome: BiomeProfile | null = null;
 
-        let elevation = base_elevation + (mountain_ranges * base_elevation) + local_details;
-
-        return (elevation + 1) / 2;
-    }
-
-    private getBiome(elevation: number, temperature: number, moisture: number): any {
-        for (const biome of this.biomes) {
-            const rules = biome.rules;
-            if (
-                (rules.minElevation === undefined || elevation >= rules.minElevation) &&
-                (rules.maxElevation === undefined || elevation <= rules.maxElevation) &&
-                (rules.minTemperature === undefined || temperature >= rules.minTemperature) &&
-                (rules.maxTemperature === undefined || temperature <= rules.maxTemperature) &&
-                (rules.minMoisture === undefined || moisture >= rules.minMoisture) &&
-                (rules.maxMoisture === undefined || moisture <= rules.maxMoisture)
-            ) {
-                return biome;
+        // Find the current biome and the next biome
+        for (let i = 0; i < this.biomes.length; i++) {
+            if (controlValue >= this.biomes[i].controlRange[0] && controlValue < this.biomes[i].controlRange[1]) {
+                primaryBiome = this.biomes[i];
+                if (i + 1 < this.biomes.length) {
+                    nextBiome = this.biomes[i + 1];
+                }
+                break;
             }
         }
-        return this.biomes[this.biomes.length - 1] || { name: 'Default', colorRamp: [{ stop: 0, color: {r:0,g:0,b:0} }] }; // Fallback
+
+        const transitionWidth = 0.1; // Use 10% of the control value space for transitions
+        const boundary = primaryBiome.controlRange[1];
+        
+        let blendedParams = { ...primaryBiome.terrainParams };
+
+        if (nextBiome && controlValue > boundary - transitionWidth) {
+            // We are in the transition zone, calculate the blend factor (alpha)
+            const alpha = (controlValue - (boundary - transitionWidth)) / transitionWidth;
+            
+            const paramsA = primaryBiome.terrainParams;
+            const paramsB = nextBiome.terrainParams;
+
+            // Linearly interpolate all terrain parameters
+            blendedParams = {
+                baseHeight: lerp(paramsA.baseHeight || 0, paramsB.baseHeight || 0, alpha),
+                scale: lerp(paramsA.scale, paramsB.scale, alpha),
+                octaves: lerp(paramsA.octaves, paramsB.octaves, alpha),
+                persistence: lerp(paramsA.persistence || 0.5, paramsB.persistence || 0.5, alpha),
+                lacunarity: lerp(paramsA.lacunarity || 2.0, paramsB.lacunarity || 2.0, alpha),
+                amplitude: lerp(paramsA.amplitude || 0, paramsB.amplitude || 0, alpha),
+                seed: paramsA.seed // Seed should not be blended
+            };
+        }
+
+        return { primaryBiome, blendedParams };
     }
 
-    private getBiomeTerrainColor(biome: any, elevation: number): BiomeColor {
-        const minElev = biome.rules.minElevation ?? 0;
-        const maxElev = biome.rules.maxElevation ?? 1;
-        const normalizedHeight = (elevation - minElev) / (maxElev - minElev);
+    private calculateElevation(worldX: number, worldZ: number, biomeParams: NoiseParams): number {
+        const params = {
+            seed: 0,
+            persistence: 0.5,
+            lacunarity: 2.0,
+            amplitude: 1,
+            baseHeight: 0,
+            ...biomeParams
+        };
+        const noiseVal = this.noise.fBm(worldX, worldZ, params);
+        return params.baseHeight + noiseVal * params.amplitude;
+    }
 
+    private getBiomeTerrainColor(biome: BiomeProfile, height: number): { r: number, g: number, b: number } {
         const ramp = biome.colorRamp;
         if (!ramp || ramp.length === 0) return { r: 1, g: 0, b: 1 }; // Default to magenta if no ramp
 
+        const { baseHeight, amplitude } = biome.terrainParams;
+        const minBiomeHeight = (baseHeight || 0) - (amplitude || 0);
+        const maxBiomeHeight = (baseHeight || 0) + (amplitude || 0);
+
+        const normalizedHeight = (height - minBiomeHeight) / (maxBiomeHeight - minBiomeHeight);
+
+        // Find the correct color in the ramp
+        let color = ramp[ramp.length - 1].color;
         for (let i = 0; i < ramp.length - 1; i++) {
             const start = ramp[i];
             const end = ramp[i + 1];
             if (normalizedHeight >= start.stop && normalizedHeight <= end.stop) {
                 const t = (normalizedHeight - start.stop) / (end.stop - start.stop);
-                return {
-                    r: start.color.r + t * (end.color.r - start.color.r),
-                    g: start.color.g + t * (end.color.g - start.color.g),
-                    b: start.color.b + t * (end.color.b - start.color.b),
+                color = {
+                    r: lerp(start.color.r, end.color.r, t),
+                    g: lerp(start.color.g, end.color.g, t),
+                    b: lerp(start.color.b, end.color.b, t),
                 };
+                break;
             }
         }
-        return ramp[ramp.length - 1].color; // Return last color if outside range
+        return color;
     }
 
     generateTerrain() {
         this.heightMap = [];
-        const vertices: number[] = [];
-        const indices: number[] = [];
-        const normals: number[] = [];
-        const uvs: number[] = [];
-        const colors: number[] = [];
-
+        // First pass: Generate the raw heightmap
         for (let z = 0; z <= this.segments; z++) {
             this.heightMap[z] = [];
             for (let x = 0; x <= this.segments; x++) {
                 const worldX = (x / this.segments) * this.width - this.width / 2;
                 const worldZ = (z / this.segments) * this.depth - this.depth / 2;
 
-                const elevation = this.calculateElevation(worldX, worldZ);
-                const height = elevation * this.maxHeight;
-                this.heightMap[z][x] = height;
+                const { blendedParams } = this.getBiomeInfo(worldX, worldZ);
+                this.heightMap[z][x] = this.calculateElevation(worldX, worldZ, blendedParams);
+            }
+        }
 
-                const temperature = (this.temperatureNoise.fBm(worldX, worldZ, this.terrainParams.environment?.temperature) + 1) / 2;
-                const moisture = (this.moistureNoise.fBm(worldX, worldZ, this.terrainParams.environment?.moisture) + 1) / 2;
+        // Post-processing step to smooth slopes
+        this.applySlopeLimiting();
 
-                const biome = this.getBiome(elevation, temperature, moisture);
-                const color = this.getBiomeTerrainColor(biome, height);
+        const vertices: number[] = [];
+        const indices: number[] = [];
+        const normals: number[] = [];
+        const uvs: number[] = [];
+        const colors: number[] = [];
+
+        // Second pass: Create vertices and colors from the final heightmap
+        for (let z = 0; z <= this.segments; z++) {
+            for (let x = 0; x <= this.segments; x++) {
+                const worldX = (x / this.segments) * this.width - this.width / 2;
+                const worldZ = (z / this.segments) * this.depth - this.depth / 2;
+                const height = this.heightMap[z][x];
+
+                const { primaryBiome } = this.getBiomeInfo(worldX, worldZ);
+                const color = this.getBiomeTerrainColor(primaryBiome, height);
 
                 vertices.push(worldX, height, worldZ);
                 uvs.push(x / this.segments, z / this.segments);
@@ -162,6 +190,7 @@ export class TerrainGenerator {
             wireframe: false
         });
 
+        // Clean up previous mesh
         if (this.mesh) {
             this.mesh.geometry.dispose();
             const mat: any = this.mesh.material;
@@ -171,8 +200,33 @@ export class TerrainGenerator {
                 mat.dispose();
             }
         }
-        
-        this.mesh = new THREE.Mesh(geometry, material);
+
+        // Enable glow effect for bright colors
+        const hasGlowingColors = colors.some((color, index) => {
+            if (index % 3 === 0) { // Check R value
+                const r = colors[index];
+                const g = colors[index + 1];
+                const b = colors[index + 2];
+                return r > 0.8 || g > 0.8 || b > 0.8; // Bright colors glow
+            }
+            return false;
+        });
+
+        if (hasGlowingColors) {
+            // Use MeshStandardMaterial for better lighting and emission
+            const standardMaterial = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                wireframe: false,
+                emissive: new THREE.Color(0.1, 0.1, 0.1), // Subtle base emission
+                emissiveIntensity: 0.3,
+                metalness: 0.2,
+                roughness: 0.8
+            });
+            this.mesh = new THREE.Mesh(geometry, standardMaterial);
+            console.log('🌟 Glowing terrain material enabled!');
+        } else {
+            this.mesh = new THREE.Mesh(geometry, material);
+        }
         this.mesh.receiveShadow = true;
         this.mesh.castShadow = true;
 
@@ -259,18 +313,26 @@ export class TerrainGenerator {
         return h0 * (1 - fz) + h1 * fz;
     }
 
-    regenerate(params: any = null) {
-        this.noise = new PerlinNoise(params?.terrain?.base?.seed);
-        this.temperatureNoise = new PerlinNoise(params?.environment?.temperature?.seed);
-        this.moistureNoise = new PerlinNoise(params?.environment?.moisture?.seed);
+    applySlopeLimiting(): void {
+        // Slope limiting disabled for unlimited creativity!
+        // Users can create impossibly jagged peaks, floating islands, 
+        // vertical cliffs, and any extreme terrain they want
+        console.log('🏔️ Slope limiting disabled - UNLIMITED terrain freedom!');
+    }
 
-        this.width = params?.global?.width || 2000;
-        this.depth = params?.global?.depth || 2000;
-        this.maxHeight = params?.global?.maxHeight || 150;
-        this.segments = params?.global?.segments || 1000;
+    regenerate(params: FullTerrainParameters) {
+        this.terrainParams = params;
+        this.noise = new PerlinNoise(); // General purpose noise
+        this.biomeControlNoise = new PerlinNoise(this.terrainParams.biomeControl.seed);
+
+        this.width = this.terrainParams.global.width;
+        this.depth = this.terrainParams.global.depth;
+        this.maxHeight = this.terrainParams.global.maxHeight;
+        this.segments = this.terrainParams.global.segments;
         
-        this.terrainParams = params?.terrain;
-        this.biomes = params?.biomes || [];
+        this.biomes = this.terrainParams.biomes;
+        // Sort biomes by control range to ensure correct lookups
+        this.biomes.sort((a, b) => a.controlRange[0] - b.controlRange[0]);
         
         return this.generateTerrain();
     }
