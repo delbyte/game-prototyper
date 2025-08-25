@@ -41,139 +41,112 @@ function updatePlayerMode(delta: number, terrainGenerator: TerrainGenerator, ass
 
     const verticalDisplacement = new THREE.Vector3(0, state.velocity.y * delta, 0);
 
-    // ## Enhanced Ground and Surface Detection ##
+    // ## Precise Mesh Collision Detection ##
     const playerRadius = 0.5;
+    const originalPosition = state.cameraPosition.clone();
     
-    // Helper function to find the highest surface (terrain or asset) beneath a position
-    function findGroundHeight(position: THREE.Vector3): { height: number; isAsset: boolean; normal?: THREE.Vector3 } {
+    // Helper function to check collision with mesh surfaces using raycasting
+    function checkMeshCollision(newPosition: THREE.Vector3, direction: THREE.Vector3): boolean {
         const raycaster = new THREE.Raycaster();
+        
+        // Get real-time collision meshes (always up-to-date with transforms)
         const collisionMeshes = assetManager.getCollisionMeshes();
         
-        // Cast ray downward from well above the position
-        const rayOrigin = new THREE.Vector3(position.x, position.y + 50, position.z);
-        const rayDirection = new THREE.Vector3(0, -1, 0);
-        raycaster.set(rayOrigin, rayDirection);
-        
-        let highestAssetHeight = -Infinity;
-        let assetNormal: THREE.Vector3 | undefined;
-        
-        // Check for asset surfaces
-        if (collisionMeshes.length > 0) {
-            const intersections = raycaster.intersectObjects(collisionMeshes, false);
-            for (const intersection of intersections) {
-                if (intersection.point.y > highestAssetHeight) {
-                    highestAssetHeight = intersection.point.y;
-                    assetNormal = intersection.face?.normal?.clone();
-                }
-            }
-        }
-        
-        // Get terrain height
-        const terrainHeight = terrainGenerator.getHeightAtPosition(position.x, position.z);
-        
-        // Return the highest surface
-        if (highestAssetHeight > terrainHeight) {
-            return { 
-                height: highestAssetHeight, 
-                isAsset: true, 
-                normal: assetNormal 
-            };
-        } else {
-            return { 
-                height: terrainHeight, 
-                isAsset: false 
-            };
-        }
-    }
-    
-    // Helper function to check for horizontal collisions (walls, etc.)
-    function checkHorizontalCollision(fromPosition: THREE.Vector3, toPosition: THREE.Vector3): boolean {
-        const raycaster = new THREE.Raycaster();
-        const collisionMeshes = assetManager.getCollisionMeshes();
-        
+        // Early exit if no collision meshes
         if (collisionMeshes.length === 0) return false;
         
-        const direction = toPosition.clone().sub(fromPosition);
-        const distance = direction.length();
-        direction.normalize();
-        
-        // Cast rays at different heights to check for wall collisions
-        const testHeights = [
-            fromPosition.y - state.playerHeight * 0.1, // Near feet
-            fromPosition.y, // Center
-            fromPosition.y + state.playerHeight * 0.7  // Near head
+        // Cast rays in multiple directions to check for collision
+        const testDirections = [
+            direction.clone().normalize(), // Primary movement direction
+            new THREE.Vector3(0, -1, 0), // Downward (for ground collision)
         ];
         
-        for (const testHeight of testHeights) {
-            const testOrigin = new THREE.Vector3(fromPosition.x, testHeight, fromPosition.z);
-            raycaster.set(testOrigin, direction);
-            
-            const intersections = raycaster.intersectObjects(collisionMeshes, false);
-            for (const intersection of intersections) {
-                // Check if collision is within movement distance + player radius
-                if (intersection.distance < distance + playerRadius) {
-                    return true;
+        // Add more directions for more thorough checking if moving fast
+        const movementSpeed = direction.length();
+        if (movementSpeed > 0.1) {
+            testDirections.push(
+                direction.clone().normalize().multiplyScalar(-1), // Backward direction
+                new THREE.Vector3(0, 1, 0),  // Upward (for ceiling collision)
+            );
+        }
+        
+        // Test from player center and key offset positions
+        const testPositions = [
+            newPosition.clone(),
+            newPosition.clone().add(new THREE.Vector3(playerRadius * 0.7, 0, 0)),
+            newPosition.clone().add(new THREE.Vector3(-playerRadius * 0.7, 0, 0)),
+            newPosition.clone().add(new THREE.Vector3(0, 0, playerRadius * 0.7)),
+            newPosition.clone().add(new THREE.Vector3(0, 0, -playerRadius * 0.7)),
+        ];
+        
+        // Add vertical test positions if checking vertical movement
+        if (Math.abs(direction.y) > 0.01) {
+            testPositions.push(
+                newPosition.clone().add(new THREE.Vector3(0, state.playerHeight * 0.4, 0)),
+                newPosition.clone().add(new THREE.Vector3(0, -state.playerHeight * 0.4, 0)),
+            );
+        }
+        
+        for (const testPos of testPositions) {
+            for (const testDir of testDirections) {
+                raycaster.set(testPos, testDir);
+                const intersections = raycaster.intersectObjects(collisionMeshes, false);
+                
+                // Check if any intersection is within player radius
+                for (const intersection of intersections) {
+                    if (intersection.distance < playerRadius) {
+                        return true; // Collision detected
+                    }
                 }
             }
         }
         
-        return false;
+        return false; // No collision
     }
 
-    // Store original position for collision rollback
-    const originalPosition = state.cameraPosition.clone();
-
-    // ## Horizontal Movement with Wall Collision ##
+    // Move on X axis with mesh collision
+    const newPosX = state.cameraPosition.clone();
+    newPosX.x += horizontalDisplacement.x;
     
-    // Calculate new horizontal position
-    const newHorizontalPos = state.cameraPosition.clone();
-    newHorizontalPos.x += horizontalDisplacement.x;
-    newHorizontalPos.z += horizontalDisplacement.z;
-    
-    // Check for horizontal collision
-    if (!checkHorizontalCollision(state.cameraPosition, newHorizontalPos)) {
-        // No horizontal collision, apply movement
-        state.cameraPosition.x = newHorizontalPos.x;
-        state.cameraPosition.z = newHorizontalPos.z;
+    if (checkMeshCollision(newPosX, new THREE.Vector3(horizontalDisplacement.x, 0, 0))) {
+        // Collision detected, don't move
+    } else {
+        state.cameraPosition.x = newPosX.x;
     }
+
+    // Move on Z axis with mesh collision
+    const newPosZ = state.cameraPosition.clone();
+    newPosZ.z += horizontalDisplacement.z;
     
-    // ## Vertical Movement and Ground Detection ##
+    if (checkMeshCollision(newPosZ, new THREE.Vector3(0, 0, horizontalDisplacement.z))) {
+        // Collision detected, don't move
+    } else {
+        state.cameraPosition.z = newPosZ.z;
+    }
+
+    // Move on Y axis (Gravity) with mesh collision
+    const newPosY = state.cameraPosition.clone();
+    newPosY.y += verticalDisplacement.y;
     
-    // Apply gravity
-    state.cameraPosition.y += verticalDisplacement.y;
-    
-    // Find the ground height at current position
-    const groundInfo = findGroundHeight(state.cameraPosition);
-    const requiredHeight = groundInfo.height + state.playerHeight;
-    
-    // Check if player is below ground level
-    if (state.cameraPosition.y <= requiredHeight) {
-        // Player is on or below ground
-        state.cameraPosition.y = requiredHeight;
+    if (checkMeshCollision(newPosY, new THREE.Vector3(0, verticalDisplacement.y, 0))) {
+        // Collision detected
         state.velocity.y = 0;
-        state.isGrounded = true;
-        
-        // If we're on an asset surface, add a small buffer for smooth movement
-        if (groundInfo.isAsset) {
-            state.cameraPosition.y += 0.01; // Small buffer to prevent jittering
+        if (verticalDisplacement.y < 0) {
+            // Hit ground
+            state.isGrounded = true;
         }
     } else {
-        // Player is in the air
-        state.isGrounded = false;
+        state.cameraPosition.y = newPosY.y;
     }
-    
-    // ## Special handling for walking up gentle slopes ##
-    if (state.isGrounded && groundInfo.normal) {
-        // Calculate the slope angle
-        const slopeAngle = Math.acos(groundInfo.normal.dot(new THREE.Vector3(0, 1, 0)));
-        const maxWalkableAngle = Math.PI / 6; // 30 degrees
-        
-        if (slopeAngle > maxWalkableAngle) {
-            // Surface too steep, treat as wall - slide down
-            const slideDirection = groundInfo.normal.clone().projectOnPlane(new THREE.Vector3(0, 1, 0)).normalize();
-            const slideSpeed = 2.0 * delta;
-            state.cameraPosition.add(slideDirection.multiplyScalar(slideSpeed));
-        }
+
+    // ## Terrain Collision ##
+    const terrainHeight = terrainGenerator.getHeightAtPosition(state.cameraPosition.x, state.cameraPosition.z);
+    if (state.cameraPosition.y < terrainHeight + state.playerHeight) {
+        state.cameraPosition.y = terrainHeight + state.playerHeight;
+        state.velocity.y = 0;
+        state.isGrounded = true;
+    } else {
+        state.isGrounded = false;
     }
 }
 
