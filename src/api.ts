@@ -39,6 +39,17 @@ SKYBOX ATMOSPHERES:
 - horizonColor, zenithColor: Create any atmosphere - toxic green, blood red, deep purple, crystal blue
 - atmosphereStrength: 0 (clear) to 2.0+ (thick, hazy alien atmospheres)
 
+MATERIAL MAGIC (Advanced Surface Properties):
+- transparency: 0 (opaque) to 1 (fully transparent glass/crystal)
+- reflectivity: 0 (matte) to 1 (perfect mirror/water surface)
+- emission: 0 (no glow) to 1 (bright self-illumination)
+- metalness: 0 (non-metal) to 1 (pure metal)
+- roughness: 0 (mirror smooth) to 1 (completely rough)
+- ior: 1.0 (air) to 2.5 (diamond) - index of refraction for glass
+- iridescence: 0 (no rainbow) to 1 (full prismatic rainbow effects)
+- isWater: true for animated water surfaces with reflections
+- flowDirection: {x, y} for animated flow direction in water/lava
+
 COLOR MAGIC:
 - Use vibrant, saturated colors for alien worlds
 - Create glowing effects with bright colors (0.8+ values)
@@ -46,14 +57,18 @@ COLOR MAGIC:
 - Use color gradients to show magical properties
 
 BIOME EXAMPLES FOR INSPIRATION:
-- "Glowing pink ponds": Create a biome with very low amplitude and bright pink colors (r: 1.0, g: 0.2, b: 0.8)
-- "Jagged red peaks": High amplitude (1000+), red colors (r: 0.9, g: 0.1, b: 0.1), high octaves (8+)
-- "Crystalline formations": Medium amplitude, prismatic colors, high octaves for detail
+- "Glowing pink ponds": Low amplitude, bright pink colors + emission: 0.8, isWater: true
+- "Jagged red peaks": High amplitude (1000+), red colors + roughness: 0.8
+- "Crystalline formations": Medium amplitude + transparency: 0.7, ior: 1.8, iridescence: 0.9
+- "Rainbow crystal world": Prismatic colors + transparency: 0.5, iridescence: 1.0, metalness: 0.1
+- "Glass mountains": High amplitude + transparency: 0.8, ior: 1.5, reflectivity: 0.9
 - "Floating islands": Negative base heights with high amplitude spikes
 - "Alien grass plains": Low amplitude, alien green colors (try r: 0.1, g: 1.0, b: 0.3)
 - "Nighttime scenes": Ambient intensity ~0.25-0.35, directional intensity ~0.15-0.25 for moonlight feel, cool blue colors
 - "Evening twilight": Ambient intensity ~0.4-0.6, warm purple/orange horizon colors  
 - "Glowing features": Use bright emissive colors (0.8+ values) in biome color ramps for glowing effects
+- "Water features": isWater: true, reflectivity: 0.8, transparency: 0.3, flowDirection for rivers
+- "Molten lava": emission: 1.0, bright orange/red colors, roughness: 0.3
 
 TECHNICAL MINIMUMS (only to prevent crashes):
 - segments: 100-2000
@@ -79,8 +94,8 @@ STRUCTURE TEMPLATE:
     },
     "biomeControl": { "seed": [RANDOM], "scale": [SCALE], "octaves": [1-8] },
     "biomes": [
-        { "name": "[NAME]", "controlRange": [-1.0, [SPLIT]], "terrainParams": { "baseHeight": [HEIGHT], "scale": [SCALE], "octaves": [1-16], "persistence": 0.5, "lacunarity": 2.0, "amplitude": [SIZE] }, "colorRamp": [ { "stop": 0, "color": { "r": [0-1], "g": [0-1], "b": [0-1] } }, { "stop": 1, "color": { "r": [0-1], "g": [0-1], "b": [0-1] } } ] },
-        { "name": "[NAME]", "controlRange": [[SPLIT], 1.0], "terrainParams": { "baseHeight": [HEIGHT], "scale": [SCALE], "octaves": [1-16], "persistence": 0.5, "lacunarity": 2.0, "amplitude": [SIZE] }, "colorRamp": [ { "stop": 0, "color": { "r": [0-1], "g": [0-1], "b": [0-1] } }, { "stop": 1, "color": { "r": [0-1], "g": [0-1], "b": [0-1] } } ] }
+        { "name": "[NAME]", "controlRange": [-1.0, [SPLIT]], "terrainParams": { "baseHeight": [HEIGHT], "scale": [SCALE], "octaves": [1-16], "persistence": 0.5, "lacunarity": 2.0, "amplitude": [SIZE] }, "colorRamp": [ { "stop": 0, "color": { "r": [0-1], "g": [0-1], "b": [0-1] } }, { "stop": 1, "color": { "r": [0-1], "g": [0-1], "b": [0-1] } } ], "material": { "transparency": [0-1], "reflectivity": [0-1], "emission": [0-1], "metalness": [0-1], "roughness": [0-1], "ior": [1.0-2.5], "iridescence": [0-1], "isWater": [true/false], "flowDirection": { "x": [FLOW_X], "y": [FLOW_Y] } } },
+        { "name": "[NAME]", "controlRange": [[SPLIT], 1.0], "terrainParams": { "baseHeight": [HEIGHT], "scale": [SCALE], "octaves": [1-16], "persistence": 0.5, "lacunarity": 2.0, "amplitude": [SIZE] }, "colorRamp": [ { "stop": 0, "color": { "r": [0-1], "g": [0-1], "b": [0-1] } }, { "stop": 1, "color": { "r": [0-1], "g": [0-1], "b": [0-1] } } ], "material": { "transparency": [0-1], "reflectivity": [0-1], "emission": [0-1], "metalness": [0-1], "roughness": [0-1], "ior": [1.0-2.5], "iridescence": [0-1], "isWater": [true/false], "flowDirection": { "x": [FLOW_X], "y": [FLOW_Y] } } }
     ]
 }
 
@@ -211,6 +226,23 @@ function validateUnlimitedParameters(params: any): any {
             stop.color = safeColor(stop.color);
             stop.stop = Math.min(Math.max(stop.stop || 0, 0), 1);
         });
+
+        // Validate material properties
+        if (biome.material) {
+            const mat = biome.material;
+            mat.transparency = mat.transparency !== undefined ? Math.min(Math.max(mat.transparency, 0), 1) : undefined;
+            mat.reflectivity = mat.reflectivity !== undefined ? Math.min(Math.max(mat.reflectivity, 0), 1) : undefined;
+            mat.emission = mat.emission !== undefined ? Math.min(Math.max(mat.emission, 0), 1) : undefined;
+            mat.metalness = mat.metalness !== undefined ? Math.min(Math.max(mat.metalness, 0), 1) : undefined;
+            mat.roughness = mat.roughness !== undefined ? Math.min(Math.max(mat.roughness, 0), 1) : undefined;
+            mat.ior = mat.ior !== undefined ? Math.min(Math.max(mat.ior, 1.0), 2.5) : undefined;
+            mat.iridescence = mat.iridescence !== undefined ? Math.min(Math.max(mat.iridescence, 0), 1) : undefined;
+            mat.isWater = mat.isWater || false;
+            if (mat.flowDirection) {
+                mat.flowDirection.x = mat.flowDirection.x || 0;
+                mat.flowDirection.y = mat.flowDirection.y || 0;
+            }
+        }
     });
 
     console.log('✨ UNLIMITED terrain parameters validated:', params);
