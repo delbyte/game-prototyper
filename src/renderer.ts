@@ -11,6 +11,7 @@ let renderer: THREE.WebGLRenderer;
 let scene: THREE.Scene;
 let skybox: THREE.Mesh;
 let skyMaterial: THREE.ShaderMaterial;
+let envMap: THREE.CubeTexture | null = null;
 
 export function initRenderer(skyboxParams: any = null, lightingParams: any = null) {
     // Create scene
@@ -35,6 +36,41 @@ export function initRenderer(skyboxParams: any = null, lightingParams: any = nul
     window.addEventListener('resize', onWindowResize);
 
     return { renderer, scene };
+}
+
+function createEnvironmentMap(): THREE.CubeTexture {
+    // Create a simple procedural environment map for reflections
+    const size = 128;
+    const canvas = document.createElement('canvas');
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d')!;
+
+    // Create 6 faces for the cube map with gradient sky
+    const faces = [];
+    for (let i = 0; i < 6; i++) {
+        ctx.clearRect(0, 0, size, size);
+        
+        // Create a simple sky gradient
+        const gradient = ctx.createLinearGradient(0, 0, 0, size);
+        gradient.addColorStop(0, '#87CEEB'); // Sky blue
+        gradient.addColorStop(1, '#E0F6FF'); // Light blue
+        
+        ctx.fillStyle = gradient;
+        ctx.fillRect(0, 0, size, size);
+        
+        faces.push(canvas.toDataURL());
+    }
+
+    const loader = new THREE.CubeTextureLoader();
+    return loader.load(faces);
+}
+
+export function getEnvironmentMap(): THREE.CubeTexture | null {
+    if (!envMap) {
+        envMap = createEnvironmentMap();
+    }
+    return envMap;
 }
 
 function setupLighting(params: any) {
