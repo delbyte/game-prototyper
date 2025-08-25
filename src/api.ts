@@ -32,6 +32,8 @@ LIGHTING CREATIVITY:
 - intensity: 0 (pitch black) to 10+ (blindingly bright alien suns)
 - colors: Any RGB from pure black (0,0,0) to pure white (1,1,1) and every vibrant color in between
 - Can simulate: night scenes, multiple suns, glowing atmospheres, bioluminescence, magical lighting
+- FOR NIGHTTIME: Use ambient intensity 0.2-0.4 and directional intensity 0.15-0.3 (moonlight = ~25% of daylight)
+- FOR NIGHTTIME: Use cool blue/purple ambient colors (r:0.1-0.3, g:0.1-0.4, b:0.3-0.7) for moonlight feel
 
 SKYBOX ATMOSPHERES:
 - horizonColor, zenithColor: Create any atmosphere - toxic green, blood red, deep purple, crystal blue
@@ -153,9 +155,9 @@ function validateUnlimitedParameters(params: any): any {
     params.skybox.atmosphereStrength = Math.max(params.skybox.atmosphereStrength || 0.05, 0);
 
     params.lighting.ambient.color = safeColor(params.lighting.ambient.color, { r: 0.1, g: 0.1, b: 0.2 });
-    params.lighting.ambient.intensity = Math.max(params.lighting.ambient.intensity || 0.3, 0);
+    params.lighting.ambient.intensity = Math.max(params.lighting.ambient.intensity !== undefined ? params.lighting.ambient.intensity : 0.3, 0);
     params.lighting.directional.color = safeColor(params.lighting.directional.color, { r: 0.8, g: 0.8, b: 0.8 });
-    params.lighting.directional.intensity = Math.max(params.lighting.directional.intensity || 0.5, 0);
+    params.lighting.directional.intensity = Math.max(params.lighting.directional.intensity !== undefined ? params.lighting.directional.intensity : 0.5, 0);
     
     // Ensure position exists
     params.lighting.directional.position = params.lighting.directional.position || { x: 100, y: 100, z: 50 };
