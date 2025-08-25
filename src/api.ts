@@ -51,7 +51,9 @@ BIOME EXAMPLES FOR INSPIRATION:
 - "Crystalline formations": Medium amplitude, prismatic colors, high octaves for detail
 - "Floating islands": Negative base heights with high amplitude spikes
 - "Alien grass plains": Low amplitude, alien green colors (try r: 0.1, g: 1.0, b: 0.3)
-- "Nighttime scenes": Very low ambient lighting (0.1), dark skybox colors
+- "Nighttime scenes": Ambient intensity ~0.25-0.35, directional intensity ~0.15-0.25 for moonlight feel, cool blue colors
+- "Evening twilight": Ambient intensity ~0.4-0.6, warm purple/orange horizon colors  
+- "Glowing features": Use bright emissive colors (0.8+ values) in biome color ramps for glowing effects
 
 TECHNICAL MINIMUMS (only to prevent crashes):
 - segments: 100-2000
