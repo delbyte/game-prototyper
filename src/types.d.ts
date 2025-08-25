@@ -19,6 +19,18 @@ export interface ColorStop {
     color: RGBColor;
 }
 
+export interface MaterialProperties {
+    transparency?: number;       // 0-1, for glass/crystal effects
+    reflectivity?: number;       // 0-1, for mirror/water surfaces
+    emission?: number;           // 0-1, for glowing materials
+    metalness?: number;          // 0-1, for metallic surfaces
+    roughness?: number;          // 0-1, surface roughness
+    ior?: number;                // Index of refraction for glass
+    iridescence?: number;        // 0-1, for rainbow/prismatic effects
+    flowDirection?: { x: number; y: number; }; // For animated water/lava
+    isWater?: boolean;           // Special water handling
+}
+
 export interface NoiseParams {
     seed?: number;
     scale: number;
@@ -34,6 +46,7 @@ export interface BiomeProfile {
     controlRange: [number, number];
     terrainParams: NoiseParams;
     colorRamp: ColorStop[];
+    material?: MaterialProperties;   // Advanced material properties
 }
 
 export interface BiomeControlParams {
