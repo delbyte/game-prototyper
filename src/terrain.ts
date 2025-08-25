@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { PerlinNoise } from './noise';
 import type { BiomeProfile, NoiseParams, FullTerrainParameters } from './types';
+import { getEnvironmentMap } from './renderer';
 
 // Helper function for linear interpolation
 function lerp(a: number, b: number, alpha: number): number {
@@ -185,10 +186,8 @@ export class TerrainGenerator {
         geometry.setAttribute('color', new THREE.Float32BufferAttribute(colors, 3));
         geometry.setIndex(indices);
 
-        const material = new THREE.MeshLambertMaterial({
-            vertexColors: true,
-            wireframe: false
-        });
+        // Create advanced material based on biome properties
+        const material = this.createAdvancedMaterial();
 
         // Clean up previous mesh
         if (this.mesh) {
@@ -201,38 +200,110 @@ export class TerrainGenerator {
             }
         }
 
-        // Enable glow effect for bright colors
-        const hasGlowingColors = colors.some((color, index) => {
-            if (index % 3 === 0) { // Check R value
-                const r = colors[index];
-                const g = colors[index + 1];
-                const b = colors[index + 2];
-                return r > 0.8 || g > 0.8 || b > 0.8; // Bright colors glow
-            }
-            return false;
-        });
-
-        if (hasGlowingColors) {
-            // Use MeshStandardMaterial for better lighting and emission
-            const standardMaterial = new THREE.MeshStandardMaterial({
-                vertexColors: true,
-                wireframe: false,
-                emissive: new THREE.Color(0.1, 0.1, 0.1), // Subtle base emission
-                emissiveIntensity: 0.3,
-                metalness: 0.2,
-                roughness: 0.8
-            });
-            this.mesh = new THREE.Mesh(geometry, standardMaterial);
-            console.log('🌟 Glowing terrain material enabled!');
-        } else {
-            this.mesh = new THREE.Mesh(geometry, material);
-        }
+        this.mesh = new THREE.Mesh(geometry, material);
         this.mesh.receiveShadow = true;
         this.mesh.castShadow = true;
 
         return this.mesh;
     }
-    
+
+    private createAdvancedMaterial(): THREE.Material {
+        // Analyze biomes to determine what kind of material to create
+        let hasTransparency = false;
+        let hasReflectivity = false;
+        let hasEmission = false;
+        let hasIridescence = false;
+        let hasWater = false;
+        let maxTransparency = 0;
+        let maxReflectivity = 0;
+        let maxEmission = 0;
+        let maxIridescence = 0;
+        let maxMetalness = 0;
+        let minRoughness = 1;
+
+        this.biomes.forEach(biome => {
+            if (biome.material) {
+                const mat = biome.material;
+                if (mat.transparency && mat.transparency > 0) {
+                    hasTransparency = true;
+                    maxTransparency = Math.max(maxTransparency, mat.transparency);
+                }
+                if (mat.reflectivity && mat.reflectivity > 0) {
+                    hasReflectivity = true;
+                    maxReflectivity = Math.max(maxReflectivity, mat.reflectivity);
+                }
+                if (mat.emission && mat.emission > 0) {
+                    hasEmission = true;
+                    maxEmission = Math.max(maxEmission, mat.emission);
+                }
+                if (mat.iridescence && mat.iridescence > 0) {
+                    hasIridescence = true;
+                    maxIridescence = Math.max(maxIridescence, mat.iridescence);
+                }
+                if (mat.isWater) {
+                    hasWater = true;
+                }
+                if (mat.metalness) {
+                    maxMetalness = Math.max(maxMetalness, mat.metalness);
+                }
+                if (mat.roughness !== undefined) {
+                    minRoughness = Math.min(minRoughness, mat.roughness);
+                }
+            }
+        });
+
+        console.log('🎨 Material analysis:', { hasTransparency, hasReflectivity, hasEmission, hasIridescence, hasWater });
+
+        // Create appropriate material based on features needed
+        if (hasTransparency || hasReflectivity || hasIridescence || hasWater) {
+            // Advanced material for glass, crystal, water effects
+            const envMap = getEnvironmentMap();
+            
+            const material = new THREE.MeshPhysicalMaterial({
+                vertexColors: true,
+                transparent: hasTransparency,
+                opacity: hasTransparency ? (1 - maxTransparency * 0.8) : 1,
+                metalness: maxMetalness,
+                roughness: minRoughness,
+                envMap: envMap,
+                envMapIntensity: hasReflectivity ? maxReflectivity * 2 : 0.5,
+                clearcoat: hasReflectivity ? maxReflectivity : 0,
+                clearcoatRoughness: 0.1,
+                ior: 1.5, // Glass-like
+                thickness: hasTransparency ? 1 : 0,
+                transmission: hasTransparency ? maxTransparency : 0,
+                sheen: hasIridescence ? maxIridescence : 0,
+                sheenColor: hasIridescence ? new THREE.Color(1, 0.5, 1) : new THREE.Color(0, 0, 0),
+                iridescence: hasIridescence ? maxIridescence : 0,
+                iridescenceIOR: 1.8,
+                iridescenceThicknessRange: [100, 800],
+                emissive: hasEmission ? new THREE.Color(0.2, 0.2, 0.2) : new THREE.Color(0, 0, 0),
+                emissiveIntensity: hasEmission ? maxEmission * 0.5 : 0
+            });
+
+            console.log('✨ Created advanced physical material with crystal/glass effects!');
+            return material;
+        } else if (hasEmission) {
+            // Glowing material
+            const material = new THREE.MeshStandardMaterial({
+                vertexColors: true,
+                emissive: new THREE.Color(0.1, 0.1, 0.1),
+                emissiveIntensity: maxEmission * 0.8,
+                metalness: maxMetalness,
+                roughness: minRoughness
+            });
+            console.log('🌟 Created glowing material!');
+            return material;
+        } else {
+            // Standard material
+            const material = new THREE.MeshLambertMaterial({
+                vertexColors: true,
+                wireframe: false
+            });
+            console.log('🏔️ Created standard terrain material');
+            return material;
+        }
+    }
 
     calculateNormals(vertices: number[], indices: number[], normals: number[]): void {
         // Initialize normals array
