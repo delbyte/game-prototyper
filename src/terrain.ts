@@ -1,11 +1,124 @@
 import * as THREE from 'three';
 import { PerlinNoise } from './noise';
-import type { BiomeProfile, NoiseParams, FullTerrainParameters } from './types';
+import type { BiomeProfile, NoiseParams, FullTerrainParameters, BiomeMaterialClassification } from './types';
 import { getEnvironmentMap } from './renderer';
+
+// Material Type Constants
+const BiomeMaterialType = {
+    STANDARD: 'standard',
+    CRYSTAL: 'crystal',
+    GLOWING: 'glowing',
+    WATER: 'water'
+} as const;
 
 // Helper function for linear interpolation
 function lerp(a: number, b: number, alpha: number): number {
     return a * (1 - alpha) + b * alpha;
+}
+
+// Biome Material Classification Functions
+function classifyBiomeMaterial(biome: BiomeProfile): BiomeMaterialClassification {
+    if (!biome.material) {
+        return {
+            materialType: BiomeMaterialType.STANDARD,
+            priority: 1,
+            coverage: 1.0
+        };
+    }
+
+    const mat = biome.material;
+    
+    // Check for water biomes first (highest priority for water systems)
+    if (mat.isWater) {
+        return {
+            materialType: BiomeMaterialType.WATER,
+            priority: 8,
+            coverage: 1.0
+        };
+    }
+    
+    // Check for crystal/glass materials
+    const hasSignificantTransparency = (mat.transparency && mat.transparency > 0.5);
+    const hasSignificantReflectivity = (mat.reflectivity && mat.reflectivity > 0.6);
+    const hasSignificantIridescence = (mat.iridescence && mat.iridescence > 0.5);
+    
+    if (hasSignificantTransparency || hasSignificantReflectivity || hasSignificantIridescence) {
+        return {
+            materialType: BiomeMaterialType.CRYSTAL,
+            priority: 6,
+            coverage: Math.max(mat.transparency || 0, mat.reflectivity || 0, mat.iridescence || 0)
+        };
+    }
+    
+    // Check for glowing materials
+    if (mat.emission && mat.emission > 0.4) {
+        return {
+            materialType: BiomeMaterialType.GLOWING,
+            priority: 4,
+            coverage: mat.emission
+        };
+    }
+    
+    // Default to standard material
+    return {
+        materialType: BiomeMaterialType.STANDARD,
+        priority: 1,
+        coverage: 1.0
+    };
+}
+
+function analyzeMaterialRequirements(biomes: BiomeProfile[]): Map<string, BiomeMaterialClassification[]> {
+    const materialMap = new Map<string, BiomeMaterialClassification[]>();
+    
+    biomes.forEach((biome, index) => {
+        const classification = classifyBiomeMaterial(biome);
+        
+        if (!materialMap.has(classification.materialType)) {
+            materialMap.set(classification.materialType, []);
+        }
+        
+        materialMap.get(classification.materialType)!.push({
+            ...classification,
+            biomeIndex: index
+        } as any);
+    });
+    
+    console.log('🔍 Material Requirements Analysis:', {
+        totalBiomes: biomes.length,
+        materialTypes: Array.from(materialMap.keys()),
+        breakdown: Object.fromEntries(
+            Array.from(materialMap.entries()).map(([type, classifications]) => [
+                type, 
+                { count: classifications.length, avgPriority: classifications.reduce((sum, c) => sum + c.priority, 0) / classifications.length }
+            ])
+        )
+    });
+    
+    return materialMap;
+}
+
+// Phase 2: Geometry Separation Functions
+function getVertexMaterialType(biome: BiomeProfile): string {
+    const classification = classifyBiomeMaterial(biome);
+    return classification.materialType;
+}
+
+function initializeMaterialGeometry(materialType: string): {
+    vertices: number[],
+    indices: number[],
+    normals: number[],
+    uvs: number[],
+    colors: number[],
+    vertexMap: Map<number, number>
+} {
+    return {
+        vertices: [],
+        indices: [],
+        normals: [],
+        uvs: [],
+        colors: [],
+        vertexMap: new Map()
+    };
 }
 
 export class TerrainGenerator {
@@ -19,6 +132,18 @@ export class TerrainGenerator {
     
     terrainParams: FullTerrainParameters;
     biomes: BiomeProfile[];
+    materialRequirements: Map<string, BiomeMaterialClassification[]>;
+
+    // Multi-mesh system for per-biome materials
+    materialMeshes: Map<string, THREE.Mesh>;
+    materialGeometries: Map<string, {
+        vertices: number[],
+        indices: number[],
+        normals: number[],
+        uvs: number[],
+        colors: number[],
+        vertexMap: Map<number, number> // Maps original vertex index to material-specific index
+    }>;
 
     mesh: THREE.Mesh | null;
     heightMap: number[][];
@@ -36,6 +161,13 @@ export class TerrainGenerator {
         this.biomes = this.terrainParams.biomes;
         // Sort biomes by control range to ensure correct lookups
         this.biomes.sort((a, b) => a.controlRange[0] - b.controlRange[0]);
+
+        // Analyze material requirements for all biomes
+        this.materialRequirements = analyzeMaterialRequirements(this.biomes);
+
+        // Initialize multi-mesh system
+        this.materialMeshes = new Map();
+        this.materialGeometries = new Map();
 
         this.mesh = null;
         this.heightMap = [];
@@ -128,6 +260,26 @@ export class TerrainGenerator {
     }
 
     generateTerrain() {
+        console.log('🏔️  Starting terrain generation...');
+        
+        // Analyze material requirements (already done in constructor, but refresh)
+        this.materialRequirements = analyzeMaterialRequirements(this.biomes);
+        
+        // Check if we need multi-material rendering
+        const needsMultiMaterial = this.materialRequirements.size > 1 || 
+                                 (this.materialRequirements.size === 1 && 
+                                  !this.materialRequirements.has(BiomeMaterialType.STANDARD));
+        
+        if (needsMultiMaterial) {
+            console.log('🎨 Using multi-material terrain generation');
+            return this.generateMultiMaterialTerrain();
+        } else {
+            console.log('📦 Using standard single-material terrain generation');
+            return this.generateStandardTerrain();
+        }
+    }
+
+    private generateStandardTerrain(): THREE.Mesh {
         this.heightMap = [];
         // First pass: Generate the raw heightmap
         for (let z = 0; z <= this.segments; z++) {
@@ -205,6 +357,321 @@ export class TerrainGenerator {
         this.mesh.castShadow = true;
 
         return this.mesh;
+    }
+
+    // Phase 2: Multi-Material Terrain Generation
+    generateMultiMaterialTerrain(): THREE.Group {
+        console.log('🔧 Starting multi-material terrain generation...');
+        
+        // Step 1: Generate heightmap (same as before)
+        this.generateHeightMap();
+        
+        // Step 2: Initialize geometry arrays for each material type
+        this.initializeMaterialGeometries();
+        
+        // Step 3: Generate vertices and assign to material-specific geometries
+        this.generateMaterialSpecificVertices();
+        
+        // Step 4: Generate indices for each material geometry
+        this.generateMaterialSpecificIndices();
+        
+        // Step 5: Create meshes for each material type
+        const terrainGroup = this.createMaterialMeshes();
+        
+        console.log('✅ Multi-material terrain generation complete!');
+        return terrainGroup;
+    }
+
+    private generateHeightMap(): void {
+        console.log('📊 Generating heightmap...');
+        this.heightMap = [];
+        
+        // First pass: Generate the raw heightmap (same logic as before)
+        for (let z = 0; z <= this.segments; z++) {
+            this.heightMap[z] = [];
+            for (let x = 0; x <= this.segments; x++) {
+                const worldX = (x / this.segments) * this.width - this.width / 2;
+                const worldZ = (z / this.segments) * this.depth - this.depth / 2;
+
+                const { blendedParams } = this.getBiomeInfo(worldX, worldZ);
+                this.heightMap[z][x] = this.calculateElevation(worldX, worldZ, blendedParams);
+            }
+        }
+
+        // Post-processing step to smooth slopes
+        this.applySlopeLimiting();
+        console.log('✅ Heightmap generated');
+    }
+
+    private initializeMaterialGeometries(): void {
+        console.log('🎨 Initializing material geometries...');
+        
+        // Clear existing geometries
+        this.materialGeometries.clear();
+        
+        // Initialize geometry arrays for each required material type
+        for (const [materialType] of this.materialRequirements) {
+            this.materialGeometries.set(materialType, initializeMaterialGeometry(materialType));
+            console.log(`  📦 Initialized geometry for: ${materialType}`);
+        }
+        
+        // Always ensure we have a standard material geometry as fallback
+        if (!this.materialGeometries.has(BiomeMaterialType.STANDARD)) {
+            this.materialGeometries.set(BiomeMaterialType.STANDARD, initializeMaterialGeometry(BiomeMaterialType.STANDARD));
+            console.log(`  📦 Added fallback standard geometry`);
+        }
+    }
+
+    private generateMaterialSpecificVertices(): void {
+        console.log('🔺 Generating material-specific vertices...');
+        
+        // FIXED APPROACH: Generate ALL vertices for each material geometry
+        // This ensures proper indexing and prevents geometry corruption
+        
+        for (let z = 0; z <= this.segments; z++) {
+            for (let x = 0; x <= this.segments; x++) {
+                const worldX = (x / this.segments) * this.width - this.width / 2;
+                const worldZ = (z / this.segments) * this.depth - this.depth / 2;
+                const height = this.heightMap[z][x];
+
+                // Determine which material this vertex should use
+                const materialType = this.getVertexMaterialType(worldX, worldZ);
+                
+                // Add this vertex to ALL geometries (we'll filter out unused triangles later)
+                for (const [currentMaterialType, geometry] of this.materialGeometries) {
+                    // Add vertex to every geometry
+                    geometry.vertices.push(worldX, height, worldZ);
+                    
+                    // Generate normal (will be recalculated later)
+                    geometry.normals.push(0, 1, 0);
+                    
+                    // Generate UV coordinates
+                    const u = x / this.segments;
+                    const v = z / this.segments;
+                    geometry.uvs.push(u, v);
+                }
+            }
+        }
+        
+        console.log('✅ Material-specific vertices generated (all vertices in all geometries)');
+    }
+
+    private generateMaterialSpecificIndices(): void {
+        console.log('🔗 Generating material-specific indices...');
+        
+        // FIXED APPROACH: For each triangle, determine its material and add to appropriate geometry
+        // Since all geometries have identical vertices, we can use the same indices
+        
+        for (let z = 0; z < this.segments; z++) {
+            for (let x = 0; x < this.segments; x++) {
+                // Calculate vertex indices for this quad (FIXED - matches standard terrain)
+                const a = x + (this.segments + 1) * z;
+                const b = x + (this.segments + 1) * (z + 1);
+                const c = (x + 1) + (this.segments + 1) * (z + 1);
+                const d = (x + 1) + (this.segments + 1) * z;
+                
+                // Determine the material for this quad by sampling its center
+                const centerX = (x + 0.5) / this.segments * this.width - this.width / 2;
+                const centerZ = (z + 0.5) / this.segments * this.depth - this.depth / 2;
+                const quadMaterialType = this.getVertexMaterialType(centerX, centerZ);
+                
+                // Add triangles only to the geometry that matches this quad's material
+                const geometry = this.materialGeometries.get(quadMaterialType);
+                if (geometry) {
+                    // Add two triangles for this quad (FIXED WINDING ORDER)
+                    geometry.indices.push(a, b, d);  // Triangle 1 - matches standard terrain
+                    geometry.indices.push(b, c, d);  // Triangle 2 - matches standard terrain
+                }
+            }
+        }
+        
+        console.log('✅ Material-specific indices generated (clean triangulation)');
+    }
+
+    private createMaterialMeshes(): THREE.Group {
+        console.log('🎭 Creating material meshes...');
+        
+        const terrainGroup = new THREE.Group();
+        terrainGroup.name = 'multi-material-terrain';
+        
+        // Clear existing meshes
+        this.materialMeshes.clear();
+        
+        // Define render order for proper transparency (opaque first, transparent last)
+        const renderOrder = [
+            BiomeMaterialType.STANDARD,  // 0 - Opaque base terrain
+            BiomeMaterialType.GLOWING,   // 1 - Emissive (can be opaque)
+            BiomeMaterialType.WATER,     // 2 - Transparent water
+            BiomeMaterialType.CRYSTAL,   // 3 - Highly transparent crystals (last)
+        ];
+        
+        // Create meshes in render order
+        for (const materialType of renderOrder) {
+            const geometryData = this.materialGeometries.get(materialType);
+            if (!geometryData || geometryData.vertices.length === 0) {
+                continue;
+            }
+            
+            console.log(`  🎨 Creating mesh for ${materialType} (${geometryData.vertices.length / 3} vertices)`);
+            
+            // Create Three.js geometry
+            const geometry = new THREE.BufferGeometry();
+            geometry.setAttribute('position', new THREE.Float32BufferAttribute(geometryData.vertices, 3));
+            geometry.setAttribute('normal', new THREE.Float32BufferAttribute(geometryData.normals, 3));
+            geometry.setAttribute('uv', new THREE.Float32BufferAttribute(geometryData.uvs, 2));
+            geometry.setIndex(geometryData.indices);
+            
+            // Recalculate normals for proper lighting
+            geometry.computeVertexNormals();
+            
+            // Create material based on type
+            const material = this.createMaterialForType(materialType);
+            
+            // Create mesh
+            const mesh = new THREE.Mesh(geometry, material);
+            mesh.name = `terrain-${materialType}`;
+            mesh.receiveShadow = true;
+            mesh.castShadow = true;
+            
+            // Set render order for transparency sorting
+            mesh.renderOrder = renderOrder.indexOf(materialType);
+            
+            // Special settings for transparent materials
+            if (materialType === BiomeMaterialType.CRYSTAL || materialType === BiomeMaterialType.WATER) {
+                mesh.castShadow = false; // Transparent objects shouldn't cast hard shadows
+                // Enable frustum culling for performance
+                mesh.frustumCulled = true;
+            }
+            
+            // Store mesh and add to group
+            this.materialMeshes.set(materialType, mesh);
+            terrainGroup.add(mesh);
+        }
+        
+        console.log(`✅ Created ${this.materialMeshes.size} material meshes with proper render order`);
+        return terrainGroup;
+    }
+
+    // Phase 2: Helper Methods
+    private getVertexMaterialType(worldX: number, worldZ: number): string {
+        const { primaryBiome } = this.getBiomeInfo(worldX, worldZ);
+        const materialClassification = classifyBiomeMaterial(primaryBiome);
+        return materialClassification.materialType;
+    }
+
+    private createMaterialForType(materialType: string, biome?: BiomeProfile): THREE.Material {
+        console.log(`  🎭 Creating advanced ${materialType} material...`);
+        
+        // Extract color information from biome if available
+        const baseColor = biome?.colorRamp?.[0]?.color ? 
+            new THREE.Color(biome.colorRamp[0].color.r / 255, biome.colorRamp[0].color.g / 255, biome.colorRamp[0].color.b / 255) :
+            new THREE.Color(0.34, 0.49, 0.27); // Default terrain green
+        
+        switch (materialType) {
+            case BiomeMaterialType.CRYSTAL:
+                // Use biome color for crystal tint, but keep it light
+                const crystalColor = baseColor.clone().lerp(new THREE.Color(1, 1, 1), 0.7);
+                
+                return new THREE.MeshPhysicalMaterial({
+                    // Base crystal appearance with biome tint
+                    color: crystalColor,
+                    metalness: 0.0,
+                    roughness: 0.05,
+                    
+                    // Transparency and refraction
+                    transmission: 0.95,
+                    thickness: 1.0,
+                    ior: 1.5, // Glass-like refraction
+                    
+                    // Crystal effects
+                    iridescence: 0.8,
+                    iridescenceIOR: 1.3,
+                    iridescenceThicknessRange: [100, 800],
+                    
+                    // Transparency
+                    transparent: true,
+                    opacity: 0.3,
+                    
+                    // Environment reflection
+                    envMapIntensity: 1.0,
+                    
+                    // Render settings for proper transparency
+                    side: THREE.DoubleSide,
+                    alphaTest: 0.1,
+                    
+                    // FIXED: Disable depth writing for proper transparency
+                    depthWrite: false,
+                });
+                
+            case BiomeMaterialType.GLOWING:
+                // Use biome color for glow, but make it warm
+                const glowColor = baseColor.clone().lerp(new THREE.Color(1, 0.3, 0), 0.6);
+                const emissiveColor = glowColor.clone().multiplyScalar(0.8);
+                
+                return new THREE.MeshStandardMaterial({
+                    // Base glowing color from biome
+                    color: glowColor,
+                    
+                    // Strong emission for glow effect
+                    emissive: emissiveColor,
+                    emissiveIntensity: 2.0,
+                    
+                    // Surface properties for lava/magma
+                    metalness: 0.1,
+                    roughness: 0.9,
+                    
+                    // No transparency for solid glow
+                    transparent: false,
+                    
+                    // Enable tone mapping for HDR glow
+                    toneMapped: false,
+                });
+                
+            case BiomeMaterialType.WATER:
+                // Use biome color for water tint
+                const waterColor = baseColor.clone().lerp(new THREE.Color(0, 0.41, 0.58), 0.7);
+                
+                const waterMaterial = new THREE.MeshPhysicalMaterial({
+                    // Water base color with biome influence
+                    color: waterColor,
+                    metalness: 0.0,
+                    roughness: 0.02,
+                    
+                    // Water transparency
+                    transmission: 0.98,
+                    thickness: 0.5,
+                    ior: 1.333, // Water's refractive index
+                    
+                    // Water surface properties
+                    transparent: true,
+                    opacity: 0.8,
+                    
+                    // Environment reflection
+                    envMapIntensity: 0.8,
+                    
+                    // Render settings
+                    side: THREE.FrontSide,
+                    
+                    // FIXED: Proper transparency settings
+                    depthWrite: false,
+                });
+                
+                // Add subtle animation to water (basic version)
+                waterMaterial.onBeforeRender = () => {
+                    const time = Date.now() * 0.001;
+                    waterMaterial.roughness = 0.02 + Math.sin(time * 0.5) * 0.01;
+                };
+                
+                return waterMaterial;
+                
+            case BiomeMaterialType.STANDARD:
+            default:
+                return new THREE.MeshLambertMaterial({
+                    color: baseColor,
+                    transparent: false,
+                    // Keep it simple and performant for standard terrain
+                });
+        }
     }
 
     private createAdvancedMaterial(): THREE.Material {
