@@ -39,27 +39,40 @@ export const sampleTerrainParameters: FullTerrainParameters = {
             colorRamp: [
                 { stop: 0, color: { r: 0.0, g: 0.05, b: 0.2 } },
                 { stop: 1, color: { r: 0.05, g: 0.1, b: 0.4 } }
-            ]
+            ],
+            material: {
+                transparency: 0.8,
+                reflectivity: 0.7,
+                ior: 1.333,
+                isWater: true
+            }
         },
         {
-            name: 'Coastal Shelf',
-            controlRange: [-0.6, -0.5],
+            name: 'Crystal Caves',
+            controlRange: [-0.6, -0.2],
             terrainParams: {
-                baseHeight: -20, // Shallow water
-                scale: 0.005,
-                octaves: 2,
-                persistence: 0.5,
-                lacunarity: 2.0,
-                amplitude: 5
+                baseHeight: -20,
+                scale: 0.008,
+                octaves: 5,
+                persistence: 0.6,
+                lacunarity: 2.2,
+                amplitude: 30
             },
             colorRamp: [
-                { stop: 0, color: { r: 0.1, g: 0.3, b: 0.8 } },
-                { stop: 1, color: { r: 0.2, g: 0.5, b: 0.9 } }
-            ]
+                { stop: 0, color: { r: 0.8, g: 0.9, b: 1.0 } },
+                { stop: 0.5, color: { r: 0.9, g: 0.8, b: 1.0 } },
+                { stop: 1, color: { r: 1.0, g: 0.9, b: 0.9 } }
+            ],
+            material: {
+                transparency: 0.9,
+                reflectivity: 0.8,
+                ior: 1.5,
+                iridescence: 0.7
+            }
         },
         {
             name: 'Plains',
-            controlRange: [-0.5, 0.0],
+            controlRange: [-0.2, 0.2],
             terrainParams: {
                 baseHeight: 5, // Slightly above sea level
                 scale: 0.008,
@@ -72,26 +85,34 @@ export const sampleTerrainParameters: FullTerrainParameters = {
                 { stop: 0, color: { r: 0.2, g: 0.6, b: 0.1 } },
                 { stop: 1, color: { r: 0.3, g: 0.7, b: 0.2 } }
             ]
+            // No material properties = standard material
         },
         {
-            name: 'Rolling Hills',
-            controlRange: [0.0, 0.3],
+            name: 'Glowing Crystals',
+            controlRange: [0.2, 0.5],
             terrainParams: {
-                baseHeight: 50, 
-                scale: 0.01,
-                octaves: 4, // More octaves than plains
-                persistence: 0.5,
-                lacunarity: 2.0,
-                amplitude: 40
+                baseHeight: 80, 
+                scale: 0.012,
+                octaves: 6,
+                persistence: 0.7,
+                lacunarity: 2.5,
+                amplitude: 60
             },
             colorRamp: [
-                { stop: 0, color: { r: 0.3, g: 0.7, b: 0.2 } },
-                { stop: 1, color: { r: 0.4, g: 0.5, b: 0.3 } }
-            ]
+                { stop: 0, color: { r: 0.2, g: 0.8, b: 1.0 } },
+                { stop: 0.5, color: { r: 0.8, g: 0.4, b: 1.0 } },
+                { stop: 1, color: { r: 1.0, g: 0.6, b: 0.8 } }
+            ],
+            material: {
+                transparency: 0.6,
+                emission: 0.8,
+                iridescence: 0.9,
+                reflectivity: 0.5
+            }
         },
         {
             name: 'Mountains',
-            controlRange: [0.3, 0.7],
+            controlRange: [0.5, 0.8],
             terrainParams: {
                 baseHeight: 200, // Much higher base
                 scale: 0.015,
@@ -105,10 +126,11 @@ export const sampleTerrainParameters: FullTerrainParameters = {
                 { stop: 0.8, color: { r: 0.8, g: 0.8, b: 0.85 } },
                 { stop: 1, color: { r: 0.95, g: 0.95, b: 1.0 } } // Snow caps
             ]
+            // No material properties = standard material
         },
         {
-            name: 'Volcanic Peaks',
-            controlRange: [0.7, 1.0],
+            name: 'Lava Peaks',
+            controlRange: [0.8, 1.0],
             terrainParams: {
                 baseHeight: 250, 
                 scale: 0.02,
@@ -119,9 +141,14 @@ export const sampleTerrainParameters: FullTerrainParameters = {
             },
             colorRamp: [
                 { stop: 0, color: { r: 0.1, g: 0.1, b: 0.1 } },
-                { stop: 0.7, color: { r: 0.3, g: 0.1, b: 0.0 } },
-                { stop: 1, color: { r: 0.9, g: 0.2, b: 0.0 } } // Lava glow
-            ]
+                { stop: 0.7, color: { r: 0.9, g: 0.3, b: 0.0 } },
+                { stop: 1, color: { r: 1.0, g: 0.5, b: 0.0 } } // Lava glow
+            ],
+            material: {
+                emission: 0.9,
+                metalness: 0.2,
+                roughness: 0.9
+            }
         }
     ]
 };
