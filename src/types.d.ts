@@ -31,6 +31,12 @@ export interface MaterialProperties {
     isWater?: boolean;           // Special water handling
 }
 
+export interface BiomeMaterialClassification {
+    materialType: string;        // 'standard' | 'crystal' | 'glowing' | 'water'
+    priority: number;            // Higher priority wins in conflicts (0-10)
+    coverage: number;            // How much of the biome uses this material (0-1)
+}
+
 export interface NoiseParams {
     seed?: number;
     scale: number;
