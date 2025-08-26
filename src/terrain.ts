@@ -252,10 +252,17 @@ export class TerrainGenerator {
             }
         });
 
-        console.log('🎨 Material analysis:', { hasTransparency, hasReflectivity, hasEmission, hasIridescence, hasWater });
+        console.log('🎨 Material analysis:', { hasTransparency, hasReflectivity, hasEmission, hasIridescence, hasWater, maxTransparency, maxReflectivity, maxIridescence, maxEmission });
 
-        // Create appropriate material based on features needed
-        if (hasTransparency || hasReflectivity || hasIridescence || hasWater) {
+        // VERY STRICT: Only use advanced materials for significant crystal/glass effects
+        const needsAdvancedMaterial = (maxTransparency > 0.6) || 
+                                     (maxReflectivity > 0.7) || 
+                                     (maxIridescence > 0.6);
+        
+        // Only glowing material if no advanced material and strong emission
+        const needsGlowingMaterial = !needsAdvancedMaterial && hasEmission && maxEmission > 0.5;
+
+        if (needsAdvancedMaterial) {
             // Advanced material for glass, crystal, water effects
             const envMap = getEnvironmentMap();
             
@@ -283,16 +290,16 @@ export class TerrainGenerator {
 
             console.log('✨ Created advanced physical material with crystal/glass effects!');
             return material;
-        } else if (hasEmission) {
-            // Glowing material
+        } else if (needsGlowingMaterial) {
+            // Glowing material - only when no crystal and strong emission
             const material = new THREE.MeshStandardMaterial({
                 vertexColors: true,
-                emissive: new THREE.Color(0.1, 0.1, 0.1),
-                emissiveIntensity: maxEmission * 0.8,
-                metalness: maxMetalness,
-                roughness: minRoughness
+                emissive: new THREE.Color(0.3, 0.1, 0.0), // Warm glow
+                emissiveIntensity: maxEmission * 1.5,
+                metalness: maxMetalness * 0.3,
+                roughness: Math.max(minRoughness, 0.4)
             });
-            console.log('🌟 Created glowing material!');
+            console.log('🔥 Created glowing material with emission:', maxEmission * 1.5);
             return material;
         } else {
             // Standard material
