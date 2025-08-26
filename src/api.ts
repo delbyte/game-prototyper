@@ -57,6 +57,10 @@ COLOR MAGIC:
 - Use color gradients to show magical properties
 
 BIOME EXAMPLES FOR INSPIRATION:
+- "Normal mountains": Medium to High amplitude based on prompt, gray colors with snowcaps + NO material property
+- "Grassy plains": Low amplitude, green colors + NO material property  
+- "Snowy peaks": High amplitude, white colors + NO material property
+- "Rocky desert": Medium amplitude, tan/brown colors + NO material property
 - "Glowing pink ponds": Low amplitude, bright pink colors + emission: 0.8, isWater: true
 - "Jagged red peaks": High amplitude (1000+), red colors + roughness: 0.8
 - "Crystalline formations": Medium amplitude + transparency: 0.7, ior: 1.8, iridescence: 0.9
@@ -94,10 +98,17 @@ STRUCTURE TEMPLATE:
     },
     "biomeControl": { "seed": [RANDOM], "scale": [SCALE], "octaves": [1-8] },
     "biomes": [
-        { "name": "[NAME]", "controlRange": [-1.0, [SPLIT]], "terrainParams": { "baseHeight": [HEIGHT], "scale": [SCALE], "octaves": [1-16], "persistence": 0.5, "lacunarity": 2.0, "amplitude": [SIZE] }, "colorRamp": [ { "stop": 0, "color": { "r": [0-1], "g": [0-1], "b": [0-1] } }, { "stop": 1, "color": { "r": [0-1], "g": [0-1], "b": [0-1] } } ], "material": { "transparency": [0-1], "reflectivity": [0-1], "emission": [0-1], "metalness": [0-1], "roughness": [0-1], "ior": [1.0-2.5], "iridescence": [0-1], "isWater": [true/false], "flowDirection": { "x": [FLOW_X], "y": [FLOW_Y] } } },
-        { "name": "[NAME]", "controlRange": [[SPLIT], 1.0], "terrainParams": { "baseHeight": [HEIGHT], "scale": [SCALE], "octaves": [1-16], "persistence": 0.5, "lacunarity": 2.0, "amplitude": [SIZE] }, "colorRamp": [ { "stop": 0, "color": { "r": [0-1], "g": [0-1], "b": [0-1] } }, { "stop": 1, "color": { "r": [0-1], "g": [0-1], "b": [0-1] } } ], "material": { "transparency": [0-1], "reflectivity": [0-1], "emission": [0-1], "metalness": [0-1], "roughness": [0-1], "ior": [1.0-2.5], "iridescence": [0-1], "isWater": [true/false], "flowDirection": { "x": [FLOW_X], "y": [FLOW_Y] } } }
+        { "name": "[NAME]", "controlRange": [-1.0, [SPLIT]], "terrainParams": { "baseHeight": [HEIGHT], "scale": [SCALE], "octaves": [1-16], "persistence": 0.5, "lacunarity": 2.0, "amplitude": [SIZE] }, "colorRamp": [ { "stop": 0, "color": { "r": [0-1], "g": [0-1], "b": [0-1] } }, { "stop": 1, "color": { "r": [0-1], "g": [0-1], "b": [0-1] } } ] },
+        { "name": "[NAME]", "controlRange": [[SPLIT], 1.0], "terrainParams": { "baseHeight": [HEIGHT], "scale": [SCALE], "octaves": [1-16], "persistence": 0.5, "lacunarity": 2.0, "amplitude": [SIZE] }, "colorRamp": [ { "stop": 0, "color": { "r": [0-1], "g": [0-1], "b": [0-1] } }, { "stop": 1, "color": { "r": [0-1], "g": [0-1], "b": [0-1] } } ] }
     ]
 }
+
+CRITICAL MATERIAL RULES:
+- For normal terrain (grass, dirt, rock, stone, snow, sand, mountains, hills, plains): DO NOT add any "material" property
+- For water/rivers/lakes: Add "material": { "isWater": true, "reflectivity": 0.8 }
+- For crystal/glass ONLY: Add "material": { "transparency": 0.7, "iridescence": 0.8 }
+- For glowing/lava/magma ONLY: Add "material": { "emission": 0.8 }
+- DEFAULT RULE: NO material property unless specifically crystal, water, or glowing!
 
 Generate terrain parameters for this request (JSON only): ${JSON.stringify(prompt)}
         `;
